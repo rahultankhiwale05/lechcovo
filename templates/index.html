@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Co-voiturage</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: auto;
+        }
+        input, button {
+            width: 100%;
+            padding: 8px;
+            margin: 6px 0;
+        }
+        .ride {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+        }
+        .delete {
+            color: red;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+
+<h2>🚗 Proposer un co-voiturage</h2>
+
+<form method="post">
+    <input name="name" placeholder="Nom du conducteur" required>
+    <input name="departure" placeholder="Lieu de départ" required>
+    <input name="destination" placeholder="Destination" required>
+    <input type="date" name="date" required>
+    <input type="number" name="seats" placeholder="Nombre de places" required>
+    <input name="contact" placeholder="Téléphone ou email" required>
+    <button type="submit">Ajouter le trajet</button>
+</form>
+
+<h2>📍 Trajets disponibles</h2>
+
+{% for ride in rides %}
+<div class="ride">
+    <strong>{{ ride.departure }} → {{ ride.destination }}</strong><br>
+    📅 {{ ride.date }} | 👥 {{ ride.seats }} place(s)<br>
+    👤 {{ ride.name }} | 📞 {{ ride.contact }}<br>
+    <a class="delete" href="/delete/{{ ride.id }}">❌ Supprimer</a>
+</div>
+{% else %}
+<p>Aucun trajet disponible</p>
+{% endfor %}
+
+</body>
+</html>
