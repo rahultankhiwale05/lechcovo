@@ -11,6 +11,26 @@ def get_db():
     conn.row_factory = sqlite3.Row
     return conn
 
+def init_db():
+    os.makedirs(app.instance_path, exist_ok=True)
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS rides (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            departure TEXT NOT NULL,
+            destination TEXT NOT NULL,
+            date TEXT NOT NULL,
+            seats INTEGER NOT NULL,
+            contact TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+# ✅ INITIALIZE DB WHEN APP IS LOADED (Gunicorn-safe)
+init_db()
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     conn = get_db()
@@ -30,7 +50,10 @@ def index():
         ))
         conn.commit()
 
-    rides = cur.execute("SELECT * FROM rides ORDER BY date").fetchall()
+    rides = cur.execute(
+        "SELECT * FROM rides ORDER BY date"
+    ).fetchall()
+
     conn.close()
     return render_template("index.html", rides=rides)
 
@@ -41,23 +64,3 @@ def delete_ride(ride_id):
     conn.commit()
     conn.close()
     return redirect(url_for("index"))
-
-def init_db():
-    os.makedirs(app.instance_path, exist_ok=True)
-    conn = get_db()
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS rides (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            departure TEXT NOT NULL,
-            destination TEXT NOT NULL,
-            date TEXT NOT NULL,
-            seats INTEGER NOT NULL,
-            contact TEXT NOT NULL
-        )
-    """)
-    conn.close()
-
-if __name__ == "__main__":
-    init_db()
-    app.run(host="0.0.0.0", port=8080)
