@@ -1,8 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for
-import sqlite3
-import os
-from datetime import date
-import secrets
+import sqlite3, os, secrets
+from datetime import datetime
 
 app = Flask(__name__, instance_relative_config=True)
 
@@ -20,11 +18,12 @@ def init_db():
         CREATE TABLE IF NOT EXISTS rides (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
+            contact TEXT NOT NULL,
             departure TEXT NOT NULL,
             destination TEXT NOT NULL,
             date TEXT NOT NULL,
+            time TEXT NOT NULL,
             seats INTEGER NOT NULL,
-            contact TEXT NOT NULL,
             secret TEXT NOT NULL
         )
     """)
@@ -33,23 +32,37 @@ def init_db():
 
 init_db()
 
+def cleanup_old_rides():
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    conn = get_db()
+    conn.execute(
+        "DELETE FROM rides WHERE date || ' ' || time < ?",
+        (now,)
+    )
+    conn.commit()
+    conn.close()
+
 @app.route("/", methods=["GET", "POST"])
 def index():
+    cleanup_old_rides()
+
     conn = get_db()
     cur = conn.cursor()
 
     if request.method == "POST":
-        secret = secrets.token_hex(4)  # simple delete key
+        secret = secrets.token_hex(4)
         cur.execute("""
-            INSERT INTO rides (name, departure, destination, date, seats, contact, secret)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO rides
+            (name, contact, departure, destination, date, time, seats, secret)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             request.form["name"],
+            request.form["contact"],
             request.form["departure"],
             request.form["destination"],
             request.form["date"],
+            request.form["time"],
             request.form["seats"],
-            request.form["contact"],
             secret
         ))
         conn.commit()
@@ -59,16 +72,12 @@ def index():
     search_from = request.args.get("from", "")
     search_to = request.args.get("to", "")
 
-    query = """
+    rides = cur.execute("""
         SELECT * FROM rides
-        WHERE date >= ?
-        AND departure LIKE ?
+        WHERE departure LIKE ?
         AND destination LIKE ?
-        ORDER BY date
-    """
-
-    rides = cur.execute(query, (
-        date.today().isoformat(),
+        ORDER BY date, time
+    """, (
         f"%{search_from}%",
         f"%{search_to}%"
     )).fetchall()
@@ -81,17 +90,12 @@ def index():
     )
 
 @app.route("/delete", methods=["POST"])
-def delete_ride():
-    ride_id = request.form["ride_id"]
-    secret = request.form["secret"]
-
+def delete():
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        "DELETE FROM rides WHERE id = ? AND secret = ?",
-        (ride_id, secret)
+    conn.execute(
+        "DELETE FROM rides WHERE id=? AND secret=?",
+        (request.form["ride_id"], request.form["secret"])
     )
     conn.commit()
     conn.close()
-
     return redirect(url_for("index"))

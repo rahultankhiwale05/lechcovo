@@ -2,12 +2,13 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Co-voiturage local</title>
+<title>Co-voiturage</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+
 <style>
 body {
     font-family: system-ui, sans-serif;
-    background: #f4f6f8;
+    background: #f5f6f8;
     margin: 0;
 }
 .container {
@@ -17,50 +18,56 @@ body {
 }
 h1 {
     text-align: center;
+    margin-bottom: 24px;
 }
 .card {
     background: white;
     padding: 16px;
-    border-radius: 8px;
-    margin-bottom: 16px;
-    box-shadow: 0 2px 8px rgba(0,0,0,.05);
+    border-radius: 10px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 12px rgba(0,0,0,.05);
+}
+h3 {
+    margin-top: 0;
+}
+.grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
 }
 input, button {
-    width: 100%;
     padding: 10px;
-    margin-top: 8px;
+    width: 100%;
 }
 button {
     background: #2563eb;
     color: white;
     border: none;
-    border-radius: 4px;
+    border-radius: 6px;
+    font-weight: 600;
+}
+.delete {
+    background: #dc2626;
+    margin-top: 8px;
 }
 .ride {
     border-left: 4px solid #2563eb;
 }
-.row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
+.notice {
+    background: #e0f2fe;
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 16px;
 }
 @media (max-width: 600px) {
-    .row { grid-template-columns: 1fr; }
-}
-.delete {
-    background: #dc2626;
-}
-.notice {
-    background: #ecfeff;
-    padding: 10px;
-    border-radius: 4px;
-    margin-bottom: 16px;
+    .grid { grid-template-columns: 1fr; }
 }
 </style>
 </head>
-<body>
 
+<body>
 <div class="container">
+
 <h1>🚗 Co-voiturage</h1>
 
 {% if key %}
@@ -73,16 +80,13 @@ Conservez-le pour supprimer votre trajet.
 <div class="card">
 <h3>➕ Proposer un trajet</h3>
 <form method="post">
-<div class="row">
+<div class="grid">
 <input name="name" placeholder="Nom" required>
 <input name="contact" placeholder="Téléphone / Email" required>
-</div>
-<div class="row">
 <input name="departure" placeholder="Départ" required>
 <input name="destination" placeholder="Destination" required>
-</div>
-<div class="row">
 <input type="date" name="date" required>
+<input type="time" name="time" required>
 <input type="number" name="seats" placeholder="Places" required>
 </div>
 <button>Publier</button>
@@ -91,7 +95,7 @@ Conservez-le pour supprimer votre trajet.
 
 <div class="card">
 <h3>🔍 Rechercher</h3>
-<form method="get" class="row">
+<form method="get" class="grid">
 <input name="from" placeholder="Départ">
 <input name="to" placeholder="Destination">
 <button>Filtrer</button>
@@ -101,7 +105,7 @@ Conservez-le pour supprimer votre trajet.
 {% for r in rides %}
 <div class="card ride">
 <strong>{{ r.departure }} → {{ r.destination }}</strong><br>
-📅 {{ r.date }} | 👥 {{ r.seats }} place(s)<br>
+📅 {{ r.date }} à {{ r.time }} | 👥 {{ r.seats }} place(s)<br>
 👤 {{ r.name }} | 📞 {{ r.contact }}
 
 <form method="post" action="/delete">
