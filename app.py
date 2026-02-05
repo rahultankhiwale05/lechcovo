@@ -1,61 +1,216 @@
-# app.py
+from flask import Flask, render_template, request, redirect, url_for
+import sqlite3
 import os
-from flask import Flask, render_template, request, jsonify
+import time
+import secrets
 from datetime import datetime
-from dotenv import load_dotenv
 
-# Load .env if running locally
-load_dotenv()
+app = Flask(__name__, instance_relative_config=True)
 
-app = Flask(__name__)
+DB_PATH = os.path.join(app.instance_path, "rides.db")
 
-# Admin key from environment variable
-ADMIN_KEY = os.environ.get("ADMIN_KEY", "default_admin_key")
 
-# In-memory storage for posts
-rides = []
+# ---------- DATABASE ----------
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
-# Helper to format datetime
-def current_time():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-@app.route('/')
+def init_db():
+    os.makedirs(app.instance_path, exist_ok=True)
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS rides (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            contact TEXT NOT NULL,
+            departure TEXT NOT NULL,
+            destination TEXT NOT NULL,
+            date TEXT NOT NULL,
+            time TEXT NOT NULL,
+            seats INTEGER NOT NULL,
+            departure_ts INTEGER NOT NULL,
+            secret TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+
+def cleanup_old_rides():
+    now_ts = int(time.time())
+    conn = get_db()
+    conn.execute(
+        "DELETE FROM rides WHERE departure_ts < ?",
+        (now_ts,)
+    )
+    conn.commit()
+    conn.close()
+
+
+# Initialize DB on startup (Gunicorn-safe)
+init_db()
+
+
+# ---------- ROUTES ----------
+@app.route("/", methods=["GET", "POST"])
 def index():
-    return render_template('index.html', rides=rides)
+    cleanup_old_rides()
+    conn = get_db()
+    cur = conn.cursor()
 
-@app.route('/add_ride', methods=['POST'])
-def add_ride():
-    data = request.json
-    ride = {
-        "id": len(rides) + 1,
-        "from": data.get("from"),
-        "to": data.get("to"),
-        "date": data.get("date"),
-        "time": data.get("time"),
-        "seats": data.get("seats"),
-        "posted_at": current_time()
-    }
-    rides.append(ride)
-    return jsonify({"status": "success", "ride": ride})
+    if request.method == "POST":
+        dt = datetime.strptime(
+            request.form["date"] + " " + request.form["time"],
+            "%Y-%m-%d %H:%M"
+        )
+        departure_ts = int(dt.timestamp())
+        secret = secrets.token_urlsafe(16)
 
-@app.route('/delete_ride', methods=['POST'])
-def delete_ride():
-    data = request.json
-    ride_id = int(data.get("id"))
-    key = data.get("admin_key")
+        cur.execute("""
+            INSERT INTO rides
+            (name, contact, departure, destination, date, time, seats, departure_ts, secret)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            request.form["name"],
+            request.form["contact"],
+            request.form["departure"],
+            request.form["destination"],
+            request.form["date"],
+            request.form["time"],
+            request.form["seats"],
+            departure_ts,
+            secret
+        ))
+        conn.commit()
 
-    global rides
-    if key == ADMIN_KEY:
-        # Admin can delete any ride
-        rides = [r for r in rides if r["id"] != ride_id]
-        return jsonify({"status": "deleted_by_admin"})
-    else:
-        # Optional: normal user deletion logic (e.g., only their own ride)
-        return jsonify({"status": "unauthorized"}), 403
+    rides = cur.execute(
+        "SELECT * FROM rides ORDER BY departure_ts"
+    ).fetchall()
 
-@app.route('/get_rides', methods=['GET'])
-def get_rides():
-    return jsonify(rides)
+    conn.close()
+    return render_template("index.html", rides=rides, now=int(time.time()))
 
-if __name__ == '__main__':
+
+@app.route("/delete/<int:ride_id>/<secret>")
+def delete_ride(ride_id, secret):
+    conn = get_db()
+    conn.execute(
+        "DELETE FROM rides WHERE id = ? AND secret = ?",
+        (ride_id, secret)
+    )
+    conn.commit()
+    conn.close()
+    return redirect(url_for("index"))
+
+from flask import Flask, render_template, request, redirect, url_for
+import sqlite3
+import os
+import time
+import secrets
+from datetime import datetime
+from zoneinfo import ZoneInfo  # ✅ Python 3.9+
+
+app = Flask(__name__, instance_relative_config=True)
+
+DB_PATH = os.path.join(app.instance_path, "rides.db")
+LOCAL_TZ = ZoneInfo("Europe/Paris")
+
+
+# ---------- DATABASE ----------
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    os.makedirs(app.instance_path, exist_ok=True)
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS rides (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            contact TEXT NOT NULL,
+            departure TEXT NOT NULL,
+            destination TEXT NOT NULL,
+            date TEXT NOT NULL,
+            time TEXT NOT NULL,
+            seats INTEGER NOT NULL,
+            departure_ts INTEGER NOT NULL,
+            secret TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+
+def cleanup_old_rides():
+    now_utc_ts = int(time.time())
+    conn = get_db()
+    conn.execute(
+        "DELETE FROM rides WHERE departure_ts < ?",
+        (now_utc_ts,)
+    )
+    conn.commit()
+    conn.close()
+
+
+# Initialize DB on startup (Gunicorn-safe)
+init_db()
+
+
+# ---------- ROUTES ----------
+@app.route("/", methods=["GET", "POST"])
+def index():
+    cleanup_old_rides()
+    conn = get_db()
+    cur = conn.cursor()
+
+    if request.method == "POST":
+        # Parse user local datetime (France)
+        local_dt = datetime.strptime(
+            request.form["date"] + " " + request.form["time"],
+            "%Y-%m-%d %H:%M"
+        ).replace(tzinfo=LOCAL_TZ)
+
+        # Convert to UTC timestamp (CORRECT)
+        departure_ts = int(local_dt.timestamp())
+
+        secret = secrets.token_urlsafe(16)
+
+        cur.execute("""
+            INSERT INTO rides
+            (name, contact, departure, destination, date, time, seats, departure_ts, secret)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            request.form["name"],
+            request.form["contact"],
+            request.form["departure"],
+            request.form["destination"],
+            request.form["date"],
+            request.form["time"],
+            request.form["seats"],
+            departure_ts,
+            secret
+        ))
+        conn.commit()
+
+        return redirect(url_for("index"))  # ✅ prevents re-post on refresh
+
+    rides = cur.execute(
+        "SELECT * FROM rides ORDER BY departure_ts"
+    ).fetchall()
+
+    conn.close()
+    return render_template("index.html", rides=rides)
+
+
+@app.route("/delete/<int:ride_id>/<secret>")
+def delete_ride(ride_id, secret):
+    conn = get_db()
+    conn.execut
+
+if __name__ == "__main__":
     app.run()

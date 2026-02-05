@@ -1,100 +1,191 @@
-<!-- templates/index.html -->
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <title>Co-Voiturage</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@3.3.2/dist/tailwind.min.css">
-    <style>
-        /* Glass-like UI */
-        .glass {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border-radius: 1rem;
-            border: 1px solid rgba(255,255,255,0.2);
-        }
-    </style>
+<meta charset="UTF-8">
+<title>🚗 Co-voiturage</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+:root {
+    --glass-bg: rgba(255,255,255,.65);
+    --glass-border: rgba(255,255,255,.4);
+    --accent: #007aff;
+    --danger: #ff3b30;
+    --text-main: #111;
+    --text-muted: #666;
+}
+
+body {
+    margin: 0;
+    padding: 24px;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+                 "Segoe UI", Roboto, sans-serif;
+    background: linear-gradient(135deg, #e9efff, #f5f7fb, #eef2ff);
+    color: var(--text-main);
+    overflow-x: hidden;
+}
+
+h1 {
+    text-align: center;
+    font-weight: 600;
+    letter-spacing: -0.4px;
+    margin-bottom: 28px;
+}
+
+/* ---------- GLASS CARD ---------- */
+.card {
+    position: relative;
+    z-index: 1;
+    overflow: visible;
+
+    background: var(--glass-bg);
+    backdrop-filter: blur(18px) saturate(160%);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    border: 1px solid var(--glass-border);
+    border-radius: 22px;
+    padding: 22px;
+    margin-bottom: 24px;
+
+    box-shadow:
+        0 24px 48px rgba(0,0,0,.08),
+        inset 0 1px 0 rgba(255,255,255,.4);
+}
+
+/* ---------- FORM ---------- */
+.grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+input {
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(0,0,0,.08);
+    background: rgba(255,255,255,.75);
+    font-size: 15px;
+    transition: all .25s ease;
+}
+
+input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px rgba(0,122,255,.18);
+    background: white;
+}
+
+/* ---------- BUTTON ---------- */
+button {
+    grid-column: span 2;
+    padding: 14px;
+    border-radius: 18px;
+    border: none;
+    background: linear-gradient(180deg, #4da3ff, #007aff);
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow:
+        0 12px 24px rgba(0,122,255,.35),
+        inset 0 1px 0 rgba(255,255,255,.35);
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+
+button:hover {
+    transform: translateY(-1px);
+}
+
+button:active {
+    transform: scale(.98);
+}
+
+/* ---------- RIDES ---------- */
+.ride {
+    position: relative;
+    z-index: 2;
+
+    background: rgba(255,255,255,.78);
+    backdrop-filter: blur(14px);
+    border-radius: 18px;
+    padding: 16px;
+    margin-bottom: 14px;
+    border: 1px solid rgba(0,0,0,.05);
+    box-shadow: 0 10px 20px rgba(0,0,0,.08);
+    animation: fadeIn .35s ease;
+}
+
+.ride strong {
+    font-size: 16px;
+}
+
+.ride small {
+    display: block;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+.delete {
+    display: inline-block;
+    margin-top: 6px;
+    color: var(--danger);
+    font-size: 14px;
+    text-decoration: none;
+}
+
+.delete:hover {
+    text-decoration: underline;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 720px) {
+    .grid { grid-template-columns: 1fr; }
+    button { grid-column: span 1; }
+}
+</style>
 </head>
-<body class="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 min-h-screen flex flex-col items-center p-6">
 
-    <h1 class="text-white text-3xl font-bold mb-6">Co-Voiturage</h1>
+<body>
 
-    <div class="glass p-6 w-full max-w-lg mb-6">
-        <h2 class="text-white text-xl mb-4">Ajouter un trajet</h2>
-        <form id="rideForm" class="flex flex-col gap-3">
-            <input type="text" placeholder="De" id="from" class="p-2 rounded">
-            <input type="text" placeholder="À" id="to" class="p-2 rounded">
-            <input type="date" id="date" class="p-2 rounded">
-            <input type="time" id="time" class="p-2 rounded">
-            <input type="number" placeholder="Places" id="seats" class="p-2 rounded">
-            <button type="submit" class="bg-white text-black p-2 rounded font-bold">Ajouter</button>
-        </form>
-    </div>
+<h1>🚗 Co-voiturage</h1>
 
-    <div class="glass p-6 w-full max-w-lg">
-        <h2 class="text-white text-xl mb-4">Trajets</h2>
-        <div id="ridesContainer" class="flex flex-col gap-3">
-            <!-- Rides will appear here -->
+<div class="card">
+    <h2>➕ Proposer un trajet</h2>
+    <form method="post" class="grid">
+        <input name="name" placeholder="Nom" required>
+        <input name="contact" placeholder="Téléphone / Email" required>
+        <input name="departure" placeholder="Départ" required>
+        <input name="destination" placeholder="Destination" required>
+        <input type="date" name="date" required>
+        <input type="time" name="time" required>
+        <input type="number" name="seats" placeholder="Places" min="1" required>
+        <button type="submit">Publier</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>📋 Trajets disponibles</h2>
+
+    {% if rides %}
+        {% for r in rides %}
+        <div class="ride">
+            <strong>{{ r.departure }} → {{ r.destination }}</strong>
+            <small>
+                🕒 {{ r.date }} à {{ r.time }} ·
+                👤 {{ r.name }} ·
+                💺 {{ r.seats }} place(s)
+            </small>
+            📞 {{ r.contact }}<br>
+            <a class="delete" href="/delete/{{ r.id }}/{{ r.secret }}">Supprimer</a>
         </div>
-    </div>
+        {% endfor %}
+    {% else %}
+        <p style="color:#666;">Aucun trajet disponible</p>
+    {% endif %}
+</div>
 
-    <script>
-        const ADMIN_KEY = prompt("Enter admin key (leave blank if not admin)");
-
-        async function fetchRides() {
-            const res = await fetch('/get_rides');
-            const rides = await res.json();
-            const container = document.getElementById('ridesContainer');
-            container.innerHTML = '';
-            rides.forEach(r => {
-                const div = document.createElement('div');
-                div.className = 'bg-white/10 p-3 rounded flex justify-between items-center';
-                div.innerHTML = `
-                    <div>
-                        <strong>${r.from}</strong> → <strong>${r.to}</strong><br>
-                        ${r.date} ${r.time} | Places: ${r.seats}
-                    </div>
-                    <button class="bg-red-500 text-white p-1 rounded" onclick="deleteRide(${r.id})">Supprimer</button>
-                `;
-                container.appendChild(div);
-            });
-        }
-
-        async function deleteRide(id) {
-            const res = await fetch('/delete_ride', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({id, admin_key: ADMIN_KEY})
-            });
-            const data = await res.json();
-            if (data.status === 'deleted_by_admin') {
-                alert('Ride deleted by admin');
-                fetchRides();
-            } else {
-                alert('Unauthorized');
-            }
-        }
-
-        document.getElementById('rideForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const ride = {
-                from: document.getElementById('from').value,
-                to: document.getElementById('to').value,
-                date: document.getElementById('date').value,
-                time: document.getElementById('time').value,
-                seats: document.getElementById('seats').value
-            };
-            await fetch('/add_ride', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(ride)
-            });
-            fetchRides();
-        });
-
-        fetchRides();
-        setInterval(fetchRides, 10000); // refresh every 10s
-    </script>
 </body>
 </html>
