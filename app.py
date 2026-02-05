@@ -1,114 +1,92 @@
 import os
-import secrets
 import time
+import secrets
 from datetime import datetime
 from zoneinfo import ZoneInfo
-
-from flask import Flask, render_template, request, redirect, url_for, flash
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, render_template, request, redirect, url_for
+import psycopg2
+from psycopg2.extras import DictCursor
 
 app = Flask(__name__)
 
-# --- CONFIGURATION ---
-# Railway provides DATABASE_URL. We fallback to sqlite only for local testing.
-database_url = os.environ.get('DATABASE_URL', 'sqlite:///rides.db')
-if database_url.startswith("postgres://"):
-    database_url = database_url.replace("postgres://", "postgresql://", 1)
-
-app.config['SQLALCHEMY_DATABASE_URI'] = database_url
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(24))
-
-db = SQLAlchemy(app)
+# Use an environment variable for the connection string
+# On Heroku/Render, this is usually provided automatically
+DATABASE_URL = os.environ.get('DATABASE_URL')
 LOCAL_TZ = ZoneInfo("Europe/Paris")
 
-# --- MODELS ---
-class Ride(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    contact = db.Column(db.String(100), nullable=False)
-    departure = db.Column(db.String(100), nullable=False)
-    destination = db.Column(db.String(100), nullable=False)
-    date = db.Column(db.String(20), nullable=False)
-    time = db.Column(db.String(10), nullable=False)
-    seats = db.Column(db.Integer, nullable=False)
-    departure_ts = db.Column(db.Integer, nullable=False)
-    secret = db.Column(db.String(50), nullable=False)
+def get_db():
+    # Connect to PostgreSQL instead of a local SQLite file
+    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+    return conn
 
-# --- DATABASE INIT ---
-with app.app_context():
-    db.create_all()
+def init_db():
+    conn = get_db()
+    cur = conn.cursor()
+    # PostgreSQL uses slightly different syntax for AUTOINCREMENT
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS rides (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            contact TEXT NOT NULL,
+            departure TEXT NOT NULL,
+            destination TEXT NOT NULL,
+            date TEXT NOT NULL,
+            time TEXT NOT NULL,
+            seats INTEGER NOT NULL,
+            departure_ts INTEGER NOT NULL,
+            secret TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
 
-def cleanup_old_rides():
-    """Removes rides that have already departed."""
-    now_ts = int(time.time())
-    Ride.query.filter(Ride.departure_ts < now_ts).delete()
-    db.session.commit()
+# Initialize DB on startup
+if DATABASE_URL:
+    init_db()
 
-# --- ROUTES ---
 @app.route("/", methods=["GET", "POST"])
 def index():
-    cleanup_old_rides()
-    search_query = request.args.get('q', '')
-    
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=DictCursor)
+
     if request.method == "POST":
-        try:
-            local_dt = datetime.strptime(
-                request.form["date"] + " " + request.form["time"],
-                "%Y-%m-%d %H:%M"
-            ).replace(tzinfo=LOCAL_TZ)
+        local_dt = datetime.strptime(
+            request.form["date"] + " " + request.form["time"],
+            "%Y-%m-%d %H:%M"
+        ).replace(tzinfo=LOCAL_TZ)
 
-            departure_ts = int(local_dt.timestamp())
-            
-            if departure_ts < time.time():
-                flash("Erreur : La date du trajet est déjà passée.", "danger")
-                return redirect(url_for("index"))
+        departure_ts = int(local_dt.timestamp())
+        secret = secrets.token_urlsafe(16)
 
-            new_ride = Ride(
-                name=request.form["name"],
-                contact=request.form["contact"],
-                departure=request.form["departure"],
-                destination=request.form["destination"],
-                date=request.form["date"],
-                time=request.form["time"],
-                seats=int(request.form["seats"]),
-                departure_ts=departure_ts,
-                secret=secrets.token_urlsafe(16)
-            )
-            db.session.add(new_ride)
-            db.session.commit()
-            flash("Trajet publié avec succès !", "success")
-            return redirect(url_for("index"))
-        except Exception as e:
-            flash(f"Erreur : {str(e)}", "danger")
+        cur.execute("""
+            INSERT INTO rides 
+            (name, contact, departure, destination, date, time, seats, departure_ts, secret)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            request.form["name"], request.form["contact"], request.form["departure"],
+            request.form["destination"], request.form["date"], request.form["time"],
+            int(request.form["seats"]), departure_ts, secret
+        ))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return redirect(url_for("index"))
 
-    if search_query:
-        rides = Ride.query.filter(
-            (Ride.destination.ilike(f'%{search_query}%')) | 
-            (Ride.departure.ilike(f'%{search_query}%'))
-        ).order_by(Ride.departure_ts).all()
-    else:
-        rides = Ride.query.order_by(Ride.departure_ts).all()
-
-    return render_template("index.html", rides=rides, search_query=search_query)
-
-@app.route("/book/<int:ride_id>")
-def book_seat(ride_id):
-    ride = Ride.query.get_or_404(ride_id)
-    if ride.seats > 0:
-        ride.seats -= 1
-        db.session.commit()
-        flash(f"Place réservée ! Contactez {ride.name} au {ride.contact}.", "success")
-    else:
-        flash("Désolé, ce trajet est complet.", "warning")
-    return redirect(url_for("index"))
+    cur.execute("SELECT * FROM rides ORDER BY departure_ts")
+    rides = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template("index.html", rides=rides)
 
 @app.route("/delete/<int:ride_id>/<secret>")
 def delete_ride(ride_id, secret):
-    ride = Ride.query.filter_by(id=ride_id, secret=secret).first_or_404()
-    db.session.delete(ride)
-    db.session.commit()
-    flash("Trajet supprimé.", "info")
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM rides WHERE id = %s AND secret = %s", (ride_id, secret))
+    conn.commit()
+    cur.close()
+    conn.close()
     return redirect(url_for("index"))
 
 if __name__ == "__main__":
