@@ -8,10 +8,10 @@ import psycopg2
 from psycopg2.extras import DictCursor
 
 app = Flask(__name__)
-# Secret key is required for Flash Messages (notifications)
+# Required for flash notifications
 app.secret_key = secrets.token_hex(16)
 
-# Configuration
+# Configuration: Railway provides DATABASE_URL automatically
 DATABASE_URL = os.environ.get('DATABASE_URL')
 LOCAL_TZ = ZoneInfo("Europe/Paris")
 
@@ -42,7 +42,7 @@ def init_db():
     conn.close()
 
 def cleanup_old_rides():
-    """Deletes rides that have already happened."""
+    """Deletes rides that have already happened based on UTC time."""
     now_ts = int(time.time())
     try:
         conn = get_db()
@@ -54,12 +54,12 @@ def cleanup_old_rides():
     except Exception as e:
         print(f"Cleanup error: {e}")
 
-# Initialize DB on startup
+# Initialize database once on startup
 if DATABASE_URL:
     try:
         init_db()
     except Exception as e:
-        print(f"Init DB error: {e}")
+        print(f"Database Init Error: {e}")
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -68,6 +68,7 @@ def index():
     cur = conn.cursor(cursor_factory=DictCursor)
 
     if request.method == "POST":
+        # Parse user local time and convert to a timestamp for the database
         local_dt = datetime.strptime(
             request.form["date"] + " " + request.form["time"],
             "%Y-%m-%d %H:%M"
@@ -91,7 +92,7 @@ def index():
         flash("Trajet publié avec succès !", "success")
         return redirect(url_for("index"))
 
-    cur.execute("SELECT * FROM rides ORDER BY departure_ts")
+    cur.execute("SELECT * FROM rides ORDER BY departure_ts ASC")
     rides = cur.fetchall()
     cur.close()
     conn.close()
@@ -102,7 +103,7 @@ def reserve(ride_id):
     conn = get_db()
     cur = conn.cursor(cursor_factory=DictCursor)
     
-    # Double-check availability on the server side
+    # Check current seats in the database (Server-side validation)
     cur.execute("SELECT seats FROM rides WHERE id = %s", (ride_id,))
     ride = cur.fetchone()
     
@@ -111,7 +112,7 @@ def reserve(ride_id):
         conn.commit()
         flash("Place réservée !", "success")
     else:
-        # User tried to reserve a ride that just became full
+        # User clicked on an outdated page; notify them it's full
         flash("Désolé, ce trajet est désormais complet.", "error")
     
     cur.close()

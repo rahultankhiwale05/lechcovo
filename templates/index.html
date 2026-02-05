@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>🚗 Co-voiturage</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         :root {
             --glass-bg: rgba(255, 255, 255, 0.85);
@@ -27,9 +27,7 @@
             content: "";
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background-image: url("/static/carte-postale-ancienne-lechelle-20_0.jpg");
-            background-size: cover;
-            background-position: center;
+            background: url("/static/carte-postale-ancienne-lechelle-20_0.jpg") center/cover;
             filter: blur(12px) brightness(0.8);
             -webkit-filter: blur(12px) brightness(0.8);
             z-index: -1;
@@ -74,7 +72,7 @@
 
         .ride {
             background: white; border-radius: 18px; padding: 18px; margin-bottom: 12px;
-            border: 1px solid #eee; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border: 1px solid #eee;
         }
 
         .btn-reserve {
@@ -90,7 +88,7 @@
 
         .delete-link {
             display: block; text-align: center; margin-top: 12px; color: var(--danger);
-            font-size: 13px; text-decoration: none; opacity: 0.8;
+            font-size: 13px; text-decoration: none;
         }
 
         @media (min-width: 600px) { .grid { grid-template-columns: 1fr 1fr; } button { grid-column: span 2; } }
@@ -113,12 +111,12 @@
         <form method="post" class="grid">
             <input name="name" placeholder="Votre Nom" required>
             <input name="contact" placeholder="Téléphone" required>
-            <input name="departure" placeholder="Ville de Départ" required>
-            <input name="destination" placeholder="Ville d'Arrivée" required>
+            <input name="departure" placeholder="Départ" required>
+            <input name="destination" placeholder="Arrivée" required>
             <input type="date" name="date" required>
             <input type="time" name="time" required>
-            <input type="number" name="seats" placeholder="Nombre de places" min="1" required>
-            <button type="submit">Publier l'annonce</button>
+            <input type="number" name="seats" placeholder="Places" min="1" required>
+            <button type="submit">Publier</button>
         </form>
     </div>
 
@@ -126,34 +124,29 @@
         <h3>Trajets Disponibles</h3>
         {% for r in rides %}
         <div class="ride">
-            <div style="display: flex; justify-content: space-between;">
-                <strong>{{ r.departure }} ➔ {{ r.destination }}</strong>
-                <span style="font-weight: bold; color: var(--accent);">
-                    {% if r.seats > 0 %}{{ r.seats }} 💺{% else %}COMPLET{% endif %}
-                </span>
-            </div>
-            <div style="font-size: 14px; color: #636366; margin-top: 6px;">
-                📅 {{ r.date }} à {{ r.time }}<br>
-                👤 Proposé par {{ r.name }} · 📞 {{ r.contact }}
-            </div>
+            <strong>{{ r.departure }} ➔ {{ r.destination }}</strong><br>
+            <small>{{ r.date }} à {{ r.time }} · Par {{ r.name }}</small>
+            
+            <p>Places restantes: <strong>{% if r.seats > 0 %}{{ r.seats }}{% else %}COMPLET{% endif %}</strong></p>
 
             {% if r.seats > 0 %}
                 <a href="/reserve/{{ r.id }}" class="btn-reserve">Réserver une place</a>
             {% else %}
-                <span class="status-complete">PLUS DE PLACES</span>
+                <span class="status-complete">TRAJET COMPLET</span>
             {% endif %}
 
-            <a href="/delete/{{ r.id }}/{{ r.secret }}" class="delete-link" onclick="return confirm('Supprimer définitivement ?')">Supprimer mon annonce</a>
+            <a href="/delete/{{ r.id }}/{{ r.secret }}" class="delete-link" onclick="return confirm('Supprimer ?')">Supprimer l'annonce</a>
         </div>
         {% else %}
-            <p style="text-align: center; color: #8e8e93;">Aucun trajet proposé.</p>
+            <p style="text-align: center;">Aucun trajet proposé.</p>
         {% endfor %}
     </div>
 
     <script>
+        // Auto-hide notifications after 4 seconds
         setTimeout(() => {
             const alerts = document.querySelectorAll('.alert');
-            alerts.forEach(alert => alert.style.display = 'none');
+            alerts.forEach(a => a.style.display = 'none');
         }, 4000);
     </script>
 </body>
