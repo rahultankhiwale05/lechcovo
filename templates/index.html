@@ -7,27 +7,22 @@
 
 <style>
 :root {
-    --glass-bg: rgba(255, 255, 255, 0.65);
-    --glass-border: rgba(255, 255, 255, 0.35);
+    --glass-bg: rgba(255,255,255,.65);
+    --glass-border: rgba(255,255,255,.4);
     --accent: #007aff;
     --danger: #ff3b30;
     --text-main: #111;
     --text-muted: #666;
 }
 
-/* ---------- GLOBAL ---------- */
 body {
     margin: 0;
     padding: 24px;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
                  "Segoe UI", Roboto, sans-serif;
-    background: linear-gradient(
-        135deg,
-        #e9efff,
-        #f5f7fb,
-        #eef2ff
-    );
+    background: linear-gradient(135deg, #e9efff, #f5f7fb, #eef2ff);
     color: var(--text-main);
+    overflow-x: hidden;
 }
 
 h1 {
@@ -39,15 +34,20 @@ h1 {
 
 /* ---------- GLASS CARD ---------- */
 .card {
+    position: relative;
+    z-index: 1;
+    overflow: visible;
+
     background: var(--glass-bg);
     backdrop-filter: blur(18px) saturate(160%);
     -webkit-backdrop-filter: blur(18px) saturate(160%);
     border: 1px solid var(--glass-border);
-    border-radius: 20px;
+    border-radius: 22px;
     padding: 22px;
-    margin-bottom: 22px;
+    margin-bottom: 24px;
+
     box-shadow:
-        0 20px 40px rgba(0,0,0,.08),
+        0 24px 48px rgba(0,0,0,.08),
         inset 0 1px 0 rgba(255,255,255,.4);
 }
 
@@ -59,11 +59,10 @@ h1 {
 }
 
 input {
-    appearance: none;
     padding: 14px 16px;
     border-radius: 14px;
     border: 1px solid rgba(0,0,0,.08);
-    background: rgba(255,255,255,.7);
+    background: rgba(255,255,255,.75);
     font-size: 15px;
     transition: all .25s ease;
 }
@@ -71,7 +70,7 @@ input {
 input:focus {
     outline: none;
     border-color: var(--accent);
-    box-shadow: 0 0 0 4px rgba(0,122,255,.15);
+    box-shadow: 0 0 0 4px rgba(0,122,255,.18);
     background: white;
 }
 
@@ -79,7 +78,7 @@ input:focus {
 button {
     grid-column: span 2;
     padding: 14px;
-    border-radius: 16px;
+    border-radius: 18px;
     border: none;
     background: linear-gradient(180deg, #4da3ff, #007aff);
     color: white;
@@ -87,15 +86,13 @@ button {
     font-weight: 600;
     cursor: pointer;
     box-shadow:
-        0 10px 20px rgba(0,122,255,.35),
+        0 12px 24px rgba(0,122,255,.35),
         inset 0 1px 0 rgba(255,255,255,.35);
     transition: transform .15s ease, box-shadow .15s ease;
 }
 
 button:hover {
     transform: translateY(-1px);
-    box-shadow:
-        0 14px 28px rgba(0,122,255,.45);
 }
 
 button:active {
@@ -104,7 +101,10 @@ button:active {
 
 /* ---------- RIDES ---------- */
 .ride {
-    background: rgba(255,255,255,.75);
+    position: relative;
+    z-index: 2;
+
+    background: rgba(255,255,255,.78);
     backdrop-filter: blur(14px);
     border-radius: 18px;
     padding: 16px;
@@ -119,8 +119,8 @@ button:active {
 }
 
 .ride small {
-    color: var(--text-muted);
     display: block;
+    color: var(--text-muted);
     margin-top: 4px;
 }
 
@@ -136,26 +136,14 @@ button:active {
     text-decoration: underline;
 }
 
-/* ---------- ANIMATIONS ---------- */
 @keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(8px);
-    }
-    to {
-        opacity: 1;
-        transform: none;
-    }
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
 }
 
-/* ---------- MOBILE ---------- */
 @media (max-width: 720px) {
-    .grid {
-        grid-template-columns: 1fr;
-    }
-    button {
-        grid-column: span 1;
-    }
+    .grid { grid-template-columns: 1fr; }
+    button { grid-column: span 1; }
 }
 </style>
 </head>
@@ -183,16 +171,16 @@ button:active {
 
     {% if rides %}
         {% for r in rides %}
-            <div class="ride">
-                <strong>{{ r.departure }} → {{ r.destination }}</strong>
-                <small>
-                    🕒 {{ r.date }} à {{ r.time }} ·
-                    👤 {{ r.name }} ·
-                    💺 {{ r.seats }} place(s)
-                </small>
-                📞 {{ r.contact }}<br>
-                <a class="delete" href="/delete/{{ r.id }}/{{ r.secret }}">Supprimer</a>
-            </div>
+        <div class="ride">
+            <strong>{{ r.departure }} → {{ r.destination }}</strong>
+            <small>
+                🕒 {{ r.date }} à {{ r.time }} ·
+                👤 {{ r.name }} ·
+                💺 {{ r.seats }} place(s)
+            </small>
+            📞 {{ r.contact }}<br>
+            <a class="delete" href="/delete/{{ r.id }}/{{ r.secret }}">Supprimer</a>
+        </div>
         {% endfor %}
     {% else %}
         <p style="color:#666;">Aucun trajet disponible</p>
