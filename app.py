@@ -1,6 +1,6 @@
 import os
-import time
 import secrets
+import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from flask import Flask, render_template, request, redirect, url_for
@@ -9,20 +9,19 @@ from psycopg2.extras import DictCursor
 
 app = Flask(__name__)
 
-# Use an environment variable for the connection string
-# On Heroku/Render, this is usually provided automatically
+# This must be set in your deployment environment variables
 DATABASE_URL = os.environ.get('DATABASE_URL')
 LOCAL_TZ = ZoneInfo("Europe/Paris")
 
 def get_db():
-    # Connect to PostgreSQL instead of a local SQLite file
-    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
-    return conn
+    if not DATABASE_URL:
+        raise ValueError("DATABASE_URL environment variable is not set.")
+    # Standard connection for cloud PostgreSQL
+    return psycopg2.connect(DATABASE_URL, sslmode='require')
 
 def init_db():
     conn = get_db()
     cur = conn.cursor()
-    # PostgreSQL uses slightly different syntax for AUTOINCREMENT
     cur.execute("""
         CREATE TABLE IF NOT EXISTS rides (
             id SERIAL PRIMARY KEY,
@@ -41,16 +40,31 @@ def init_db():
     cur.close()
     conn.close()
 
-# Initialize DB on startup
+def cleanup_old_rides():
+    # Deletes rides that have already happened based on the current time
+    now_ts = int(time.time())
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM rides WHERE departure_ts < %s", (now_ts,))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+# Initialize database on startup
 if DATABASE_URL:
-    init_db()
+    try:
+        init_db()
+    except Exception as e:
+        print(f"Database init error: {e}")
 
 @app.route("/", methods=["GET", "POST"])
 def index():
+    cleanup_old_rides() # Runs every time the page is loaded to clear expired rides
     conn = get_db()
     cur = conn.cursor(cursor_factory=DictCursor)
 
     if request.method == "POST":
+        # Combines date and time into a single timestamp for easy comparison
         local_dt = datetime.strptime(
             request.form["date"] + " " + request.form["time"],
             "%Y-%m-%d %H:%M"
