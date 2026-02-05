@@ -8,15 +8,15 @@ import psycopg2
 from psycopg2.extras import DictCursor
 
 app = Flask(__name__)
+app.secret_key = secrets.token_hex(16)
 
-# This must be set in your deployment environment variables
+# Configuration
 DATABASE_URL = os.environ.get('DATABASE_URL')
 LOCAL_TZ = ZoneInfo("Europe/Paris")
 
 def get_db():
     if not DATABASE_URL:
-        raise ValueError("DATABASE_URL environment variable is not set.")
-    # Standard connection for cloud PostgreSQL
+        raise ValueError("DATABASE_URL is not set in environment variables.")
     return psycopg2.connect(DATABASE_URL, sslmode='require')
 
 def init_db():
@@ -41,30 +41,32 @@ def init_db():
     conn.close()
 
 def cleanup_old_rides():
-    # Deletes rides that have already happened based on the current time
+    """Deletes rides where the departure time has passed."""
     now_ts = int(time.time())
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM rides WHERE departure_ts < %s", (now_ts,))
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM rides WHERE departure_ts < %s", (now_ts,))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Cleanup error: {e}")
 
-# Initialize database on startup
+# Initialize DB
 if DATABASE_URL:
     try:
         init_db()
     except Exception as e:
-        print(f"Database init error: {e}")
+        print(f"Init DB error: {e}")
 
 @app.route("/", methods=["GET", "POST"])
 def index():
-    cleanup_old_rides() # Runs every time the page is loaded to clear expired rides
+    cleanup_old_rides()
     conn = get_db()
     cur = conn.cursor(cursor_factory=DictCursor)
 
     if request.method == "POST":
-        # Combines date and time into a single timestamp for easy comparison
         local_dt = datetime.strptime(
             request.form["date"] + " " + request.form["time"],
             "%Y-%m-%d %H:%M"
@@ -92,6 +94,17 @@ def index():
     cur.close()
     conn.close()
     return render_template("index.html", rides=rides)
+
+@app.route("/reserve/<int:ride_id>")
+def reserve(ride_id):
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=DictCursor)
+    # Only subtract if seats are greater than 0
+    cur.execute("UPDATE rides SET seats = seats - 1 WHERE id = %s AND seats > 0", (ride_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for("index"))
 
 @app.route("/delete/<int:ride_id>/<secret>")
 def delete_ride(ride_id, secret):
