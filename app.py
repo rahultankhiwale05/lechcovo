@@ -3,11 +3,12 @@ import secrets
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, flash
 import psycopg2
 from psycopg2.extras import DictCursor
 
 app = Flask(__name__)
+# Secret key is required for Flash Messages (notifications)
 app.secret_key = secrets.token_hex(16)
 
 # Configuration
@@ -41,7 +42,7 @@ def init_db():
     conn.close()
 
 def cleanup_old_rides():
-    """Deletes rides where the departure time has passed."""
+    """Deletes rides that have already happened."""
     now_ts = int(time.time())
     try:
         conn = get_db()
@@ -53,7 +54,7 @@ def cleanup_old_rides():
     except Exception as e:
         print(f"Cleanup error: {e}")
 
-# Initialize DB
+# Initialize DB on startup
 if DATABASE_URL:
     try:
         init_db()
@@ -87,6 +88,7 @@ def index():
         conn.commit()
         cur.close()
         conn.close()
+        flash("Trajet publié avec succès !", "success")
         return redirect(url_for("index"))
 
     cur.execute("SELECT * FROM rides ORDER BY departure_ts")
@@ -99,9 +101,19 @@ def index():
 def reserve(ride_id):
     conn = get_db()
     cur = conn.cursor(cursor_factory=DictCursor)
-    # Only subtract if seats are greater than 0
-    cur.execute("UPDATE rides SET seats = seats - 1 WHERE id = %s AND seats > 0", (ride_id,))
-    conn.commit()
+    
+    # Double-check availability on the server side
+    cur.execute("SELECT seats FROM rides WHERE id = %s", (ride_id,))
+    ride = cur.fetchone()
+    
+    if ride and ride['seats'] > 0:
+        cur.execute("UPDATE rides SET seats = seats - 1 WHERE id = %s", (ride_id,))
+        conn.commit()
+        flash("Place réservée !", "success")
+    else:
+        # User tried to reserve a ride that just became full
+        flash("Désolé, ce trajet est désormais complet.", "error")
+    
     cur.close()
     conn.close()
     return redirect(url_for("index"))
@@ -114,6 +126,7 @@ def delete_ride(ride_id, secret):
     conn.commit()
     cur.close()
     conn.close()
+    flash("Annonce supprimée.", "success")
     return redirect(url_for("index"))
 
 if __name__ == "__main__":

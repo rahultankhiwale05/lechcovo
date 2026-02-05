@@ -6,9 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
     <style>
         :root {
-            --glass-bg: rgba(255, 255, 255, 0.8);
+            --glass-bg: rgba(255, 255, 255, 0.85);
             --glass-border: rgba(255, 255, 255, 0.4);
             --accent: #007aff;
+            --success: #34c759;
             --danger: #ff3b30;
             --text-main: #1c1c1e;
         }
@@ -21,7 +22,7 @@
             min-height: 100vh;
         }
 
-        /* Blurred background using the postcard image */
+        /* Blurred Postcard Background */
         body::before {
             content: "";
             position: fixed;
@@ -29,53 +30,67 @@
             background-image: url("/static/carte-postale-ancienne-lechelle-20_0.jpg");
             background-size: cover;
             background-position: center;
-            filter: blur(10px);
-            -webkit-filter: blur(10px);
+            filter: blur(12px) brightness(0.8);
+            -webkit-filter: blur(12px) brightness(0.8);
             z-index: -1;
-            transform: scale(1.1); /* Prevents edge artifacts */
+            transform: scale(1.1);
         }
+
+        .alert {
+            padding: 15px;
+            margin: 0 auto 20px;
+            border-radius: 12px;
+            text-align: center;
+            font-weight: bold;
+            color: white;
+            max-width: 500px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .success { background: rgba(52, 199, 89, 0.9); }
+        .error { background: rgba(255, 59, 48, 0.9); }
 
         .card {
             background: var(--glass-bg);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
             border: 1px solid var(--glass-border);
-            border-radius: 20px;
-            padding: 20px;
+            border-radius: 22px;
+            padding: 24px;
             max-width: 500px;
             margin: 0 auto 20px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.15);
         }
 
-        .grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+        .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
         input { 
-            padding: 12px; border-radius: 10px; border: 1px solid #ccc; font-size: 16px; 
+            padding: 14px; border-radius: 12px; border: 1px solid #ccc; font-size: 16px; 
             width: 100%; box-sizing: border-box;
         }
         button { 
-            background: var(--accent); color: white; border: none; padding: 14px; 
-            border-radius: 10px; font-weight: bold; cursor: pointer; 
+            background: var(--accent); color: white; border: none; padding: 16px; 
+            border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px;
         }
 
         .ride {
-            background: white; border-radius: 15px; padding: 15px; margin-bottom: 10px;
-            border: 1px solid #eee;
+            background: white; border-radius: 18px; padding: 18px; margin-bottom: 12px;
+            border: 1px solid #eee; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
 
         .btn-reserve {
-            display: block; text-align: center; background: #34c759; color: white;
-            text-decoration: none; padding: 12px; border-radius: 10px; font-weight: bold;
-            margin-top: 10px;
+            display: block; text-align: center; background: var(--success); color: white;
+            text-decoration: none; padding: 14px; border-radius: 12px; font-weight: bold;
+            margin-top: 12px;
         }
 
         .status-complete {
             display: block; text-align: center; background: #8e8e93; color: white;
-            padding: 12px; border-radius: 10px; font-weight: bold; margin-top: 10px;
+            padding: 14px; border-radius: 12px; font-weight: bold; margin-top: 12px;
         }
 
         .delete-link {
-            display: block; text-align: center; margin-top: 10px; color: var(--danger);
-            font-size: 12px; text-decoration: none;
+            display: block; text-align: center; margin-top: 12px; color: var(--danger);
+            font-size: 13px; text-decoration: none; opacity: 0.8;
         }
 
         @media (min-width: 600px) { .grid { grid-template-columns: 1fr 1fr; } button { grid-column: span 2; } }
@@ -83,43 +98,63 @@
 </head>
 <body>
 
-    <h1 style="text-align: center; color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">🚗 Co-voiturage</h1>
+    <h1 style="text-align: center; color: white; text-shadow: 0 2px 10px rgba(0,0,0,0.3);">🚗 Co-voiturage</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
 
     <div class="card">
         <h3>Proposer un trajet</h3>
         <form method="post" class="grid">
-            <input name="name" placeholder="Nom" required>
-            <input name="contact" placeholder="Tél" required>
-            <input name="departure" placeholder="Départ" required>
-            <input name="destination" placeholder="Arrivée" required>
+            <input name="name" placeholder="Votre Nom" required>
+            <input name="contact" placeholder="Téléphone" required>
+            <input name="departure" placeholder="Ville de Départ" required>
+            <input name="destination" placeholder="Ville d'Arrivée" required>
             <input type="date" name="date" required>
             <input type="time" name="time" required>
-            <input type="number" name="seats" placeholder="Places" min="1" required>
-            <button type="submit">Publier</button>
+            <input type="number" name="seats" placeholder="Nombre de places" min="1" required>
+            <button type="submit">Publier l'annonce</button>
         </form>
     </div>
 
     <div class="card">
-        <h3>Trajets</h3>
+        <h3>Trajets Disponibles</h3>
         {% for r in rides %}
         <div class="ride">
-            <strong>{{ r.departure }} ➔ {{ r.destination }}</strong><br>
-            <small>{{ r.date }} à {{ r.time }} | Par: {{ r.name }}</small><br>
-            
-            <p><strong>Places restantes:</strong> 
-                {% if r.seats > 0 %}{{ r.seats }}{% else %}COMPLET{% endif %}
-            </p>
+            <div style="display: flex; justify-content: space-between;">
+                <strong>{{ r.departure }} ➔ {{ r.destination }}</strong>
+                <span style="font-weight: bold; color: var(--accent);">
+                    {% if r.seats > 0 %}{{ r.seats }} 💺{% else %}COMPLET{% endif %}
+                </span>
+            </div>
+            <div style="font-size: 14px; color: #636366; margin-top: 6px;">
+                📅 {{ r.date }} à {{ r.time }}<br>
+                👤 Proposé par {{ r.name }} · 📞 {{ r.contact }}
+            </div>
 
             {% if r.seats > 0 %}
                 <a href="/reserve/{{ r.id }}" class="btn-reserve">Réserver une place</a>
             {% else %}
-                <span class="status-complete">TRAJET COMPLET</span>
+                <span class="status-complete">PLUS DE PLACES</span>
             {% endif %}
 
-            <a href="/delete/{{ r.id }}/{{ r.secret }}" class="delete-link" onclick="return confirm('Supprimer?')">Supprimer l'annonce</a>
+            <a href="/delete/{{ r.id }}/{{ r.secret }}" class="delete-link" onclick="return confirm('Supprimer définitivement ?')">Supprimer mon annonce</a>
         </div>
+        {% else %}
+            <p style="text-align: center; color: #8e8e93;">Aucun trajet proposé.</p>
         {% endfor %}
     </div>
 
+    <script>
+        setTimeout(() => {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(alert => alert.style.display = 'none');
+        }, 4000);
+    </script>
 </body>
 </html>
