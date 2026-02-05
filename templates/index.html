@@ -1,83 +1,163 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <title>🚗 Co-voiturage</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>🚗 Co-voiturage</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <style>
-        body {
-            font-family: system-ui, -apple-system, sans-serif;
-            background: #f4f6f8;
-            margin: 0;
-            padding: 20px;
-        }
+<style>
+:root {
+    --glass-bg: rgba(255, 255, 255, 0.65);
+    --glass-border: rgba(255, 255, 255, 0.35);
+    --accent: #007aff;
+    --danger: #ff3b30;
+    --text-main: #111;
+    --text-muted: #666;
+}
 
-        h1 {
-            text-align: center;
-            margin-bottom: 20px;
-        }
+/* ---------- GLOBAL ---------- */
+body {
+    margin: 0;
+    padding: 24px;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+                 "Segoe UI", Roboto, sans-serif;
+    background: linear-gradient(
+        135deg,
+        #e9efff,
+        #f5f7fb,
+        #eef2ff
+    );
+    color: var(--text-main);
+}
 
-        .card {
-            background: white;
-            padding: 20px;
-            border-radius: 14px;
-            margin-bottom: 20px;
-            box-shadow: 0 6px 16px rgba(0,0,0,.06);
-        }
+h1 {
+    text-align: center;
+    font-weight: 600;
+    letter-spacing: -0.4px;
+    margin-bottom: 28px;
+}
 
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-        }
+/* ---------- GLASS CARD ---------- */
+.card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(18px) saturate(160%);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    padding: 22px;
+    margin-bottom: 22px;
+    box-shadow:
+        0 20px 40px rgba(0,0,0,.08),
+        inset 0 1px 0 rgba(255,255,255,.4);
+}
 
-        input, button {
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px solid #ccc;
-            font-size: 15px;
-        }
+/* ---------- FORM ---------- */
+.grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
 
-        button {
-            background: #2563eb;
-            color: white;
-            border: none;
-            cursor: pointer;
-            grid-column: span 2;
-        }
+input {
+    appearance: none;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(0,0,0,.08);
+    background: rgba(255,255,255,.7);
+    font-size: 15px;
+    transition: all .25s ease;
+}
 
-        button:hover {
-            background: #1e40af;
-        }
+input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px rgba(0,122,255,.15);
+    background: white;
+}
 
-        .ride {
-            border-left: 5px solid #2563eb;
-            padding: 14px;
-            margin-bottom: 12px;
-            background: white;
-            border-radius: 10px;
-        }
+/* ---------- BUTTON ---------- */
+button {
+    grid-column: span 2;
+    padding: 14px;
+    border-radius: 16px;
+    border: none;
+    background: linear-gradient(180deg, #4da3ff, #007aff);
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow:
+        0 10px 20px rgba(0,122,255,.35),
+        inset 0 1px 0 rgba(255,255,255,.35);
+    transition: transform .15s ease, box-shadow .15s ease;
+}
 
-        .ride small {
-            color: #555;
-        }
+button:hover {
+    transform: translateY(-1px);
+    box-shadow:
+        0 14px 28px rgba(0,122,255,.45);
+}
 
-        .delete {
-            color: #dc2626;
-            text-decoration: none;
-            font-size: 14px;
-        }
+button:active {
+    transform: scale(.98);
+}
 
-        @media (max-width: 700px) {
-            .grid {
-                grid-template-columns: 1fr;
-            }
-            button {
-                grid-column: span 1;
-            }
-        }
-    </style>
+/* ---------- RIDES ---------- */
+.ride {
+    background: rgba(255,255,255,.75);
+    backdrop-filter: blur(14px);
+    border-radius: 18px;
+    padding: 16px;
+    margin-bottom: 14px;
+    border: 1px solid rgba(0,0,0,.05);
+    box-shadow: 0 10px 20px rgba(0,0,0,.08);
+    animation: fadeIn .35s ease;
+}
+
+.ride strong {
+    font-size: 16px;
+}
+
+.ride small {
+    color: var(--text-muted);
+    display: block;
+    margin-top: 4px;
+}
+
+.delete {
+    display: inline-block;
+    margin-top: 6px;
+    color: var(--danger);
+    font-size: 14px;
+    text-decoration: none;
+}
+
+.delete:hover {
+    text-decoration: underline;
+}
+
+/* ---------- ANIMATIONS ---------- */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* ---------- MOBILE ---------- */
+@media (max-width: 720px) {
+    .grid {
+        grid-template-columns: 1fr;
+    }
+    button {
+        grid-column: span 1;
+    }
+}
+</style>
 </head>
 
 <body>
@@ -104,18 +184,18 @@
     {% if rides %}
         {% for r in rides %}
             <div class="ride">
-                <strong>{{ r.departure }} → {{ r.destination }}</strong><br>
+                <strong>{{ r.departure }} → {{ r.destination }}</strong>
                 <small>
-                    🕒 {{ r.date }} à {{ r.time }} |
-                    👤 {{ r.name }} |
+                    🕒 {{ r.date }} à {{ r.time }} ·
+                    👤 {{ r.name }} ·
                     💺 {{ r.seats }} place(s)
-                </small><br>
+                </small>
                 📞 {{ r.contact }}<br>
                 <a class="delete" href="/delete/{{ r.id }}/{{ r.secret }}">Supprimer</a>
             </div>
         {% endfor %}
     {% else %}
-        <p>Aucun trajet disponible</p>
+        <p style="color:#666;">Aucun trajet disponible</p>
     {% endif %}
 </div>
 
