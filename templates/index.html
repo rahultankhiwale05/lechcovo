@@ -2,10 +2,9 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>🚗 Co-voiturage Pro</title>
+    <title>🚗 Co-voiturage</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        /* [Keeping your existing CSS variables and styles] */
         :root {
             --glass-bg: rgba(255,255,255,.65);
             --glass-border: rgba(255,255,255,.4);
@@ -15,33 +14,41 @@
             --text-main: #111;
             --text-muted: #666;
         }
-        /* ... (Same styles as provided in original code) ... */
-        
-        .alert {
-            padding: 12px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            text-align: center;
-            font-weight: 500;
+        body {
+            margin: 0; padding: 24px;
+            font-family: -apple-system, sans-serif;
+            background: linear-gradient(135deg, #e9efff, #f5f7fb);
+            color: var(--text-main);
         }
+        .card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            padding: 20px; border-radius: 20px;
+            max-width: 700px; margin: 0 auto 24px;
+        }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        input, button {
+            padding: 12px; border-radius: 12px; border: 1px solid #ddd; font-size: 16px;
+        }
+        button {
+            grid-column: span 2; background: var(--text-main); color: white;
+            font-weight: 600; cursor: pointer; border: none;
+        }
+        .alert { padding: 12px; border-radius: 12px; margin-bottom: 20px; text-align: center; }
         .alert-success { background: #d2f9d8; color: #1e4620; }
         .alert-danger { background: #ffe2e2; color: #801b1b; }
-        .alert-info { background: #e0f2ff; color: #004a80; }
-        
-        .btn-book {
-            display: inline-block;
-            background: var(--accent);
-            color: white;
-            padding: 6px 14px;
-            border-radius: 10px;
-            text-decoration: none;
-            font-weight: 600;
-            margin-right: 10px;
+        .ride {
+            padding: 15px 0; border-bottom: 1px solid #eee;
         }
-        .full { color: var(--text-muted); font-weight: 600; }
+        .btn-book {
+            display: inline-block; background: var(--accent); color: white;
+            padding: 6px 14px; border-radius: 10px; text-decoration: none;
+            font-weight: 600; font-size: 14px;
+        }
+        .delete { color: var(--danger); font-size: 14px; text-decoration: none; margin-left: 10px;}
     </style>
 </head>
-
 <body>
 
 <h1>🚗 Co-voiturage</h1>
@@ -58,54 +65,45 @@
     <h2>➕ Proposer un trajet</h2>
     <form method="post" class="grid">
         <input name="name" placeholder="Votre Nom" required>
-        <input name="contact" placeholder="Téléphone / Email" required>
+        <input name="contact" placeholder="Contact (Tél/WhatsApp)" required>
         <input name="departure" placeholder="Ville de départ" required>
         <input name="destination" placeholder="Ville d'arrivée" required>
         <input type="date" name="date" id="datePicker" required>
         <input type="time" name="time" required>
-        <input type="number" name="seats" placeholder="Places" min="1" required>
-        <button type="submit">Publier le trajet</button>
+        <input type="number" name="seats" placeholder="Nombre de places" min="1" required>
+        <button type="submit">Publier</button>
     </form>
 </div>
 
 <div class="card">
     <h2>🔍 Rechercher</h2>
-    <form method="get" action="/">
-        <div style="display: flex; gap: 10px;">
-            <input name="q" placeholder="Où allez-vous ?" value="{{ search_query }}" style="flex: 1;">
-            <button type="submit" style="width: auto; padding: 0 20px; background: #666;">Filtrer</button>
-        </div>
+    <form method="get" action="/" style="display: flex; gap: 10px;">
+        <input name="q" placeholder="Où allez-vous ?" value="{{ search_query }}" style="flex: 1;">
+        <button type="submit" style="width: auto; grid-column: auto;">Filtrer</button>
     </form>
 </div>
 
 <div class="card">
     <h2>📋 Trajets disponibles</h2>
-    {% if rides %}
-        {% for r in rides %}
-        <div class="ride">
-            <strong>{{ r.departure }} → {{ r.destination }}</strong>
-            <small>
-                🕒 {{ r.date }} à {{ r.time }} ·
-                👤 {{ r.name }} ·
-                💺 {{ r.seats }} place(s) libre(s)
-            </small>
-            <div style="margin-top: 10px;">
-                {% if r.seats > 0 %}
-                    <a href="/book/{{ r.id }}" class="btn-book">Réserver</a>
-                {% else %}
-                    <span class="full">Complet</span>
-                {% endif %}
-                <a class="delete" href="/delete/{{ r.id }}/{{ r.secret }}" onclick="return confirm('Supprimer ce trajet ?')">Supprimer</a>
-            </div>
+    {% for r in rides %}
+    <div class="ride">
+        <strong>{{ r.departure }} → {{ r.destination }}</strong><br>
+        <small>📅 {{ r.date }} à {{ r.time }} | 👤 {{ r.name }} | 💺 {{ r.seats }} places</small>
+        <div style="margin-top: 8px;">
+            {% if r.seats > 0 %}
+                <a href="/book/{{ r.id }}" class="btn-book">Réserver</a>
+            {% else %}
+                <span style="color: #999;">Complet</span>
+            {% endif %}
+            <a class="delete" href="/delete/{{ r.id }}/{{ r.secret }}" onclick="return confirm('Supprimer ?')">Supprimer</a>
         </div>
-        {% endfor %}
+    </div>
     {% else %}
-        <p style="color:#666; text-align: center;">Aucun trajet trouvé.</p>
-    {% endif %}
+    <p>Aucun trajet disponible pour le moment.</p>
+    {% endfor %}
 </div>
 
 <script>
-    // Prevent selecting past dates in the form
     document.getElementById('datePicker').min = new Date().toISOString().split("T")[0];
 </script>
 

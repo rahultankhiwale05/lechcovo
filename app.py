@@ -10,17 +10,17 @@ from flask_sqlalchemy import SQLAlchemy
 app = Flask(__name__)
 
 # --- CONFIGURATION ---
-# Railway provides DATABASE_URL. Defaulting to sqlite for local dev.
-app.config['SQLALCHEMY_DATABASE_PATH'] = os.environ.get('DATABASE_URL', 'sqlite:///rides.db')
-if app.config['SQLALCHEMY_DATABASE_PATH'].startswith("postgres://"):
-    app.config['SQLALCHEMY_DATABASE_PATH'] = app.config['SQLALCHEMY_DATABASE_PATH'].replace("postgres://", "postgresql://", 1)
+# Railway provides DATABASE_URL. We fallback to sqlite only for local testing.
+database_url = os.environ.get('DATABASE_URL', 'sqlite:///rides.db')
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = app.config['SQLALCHEMY_DATABASE_PATH']
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(24))
 
 db = SQLAlchemy(app)
-LOCAL_TZ = ZoneInfo("Europe/Paris") [cite: 1]
+LOCAL_TZ = ZoneInfo("Europe/Paris")
 
 # --- MODELS ---
 class Ride(db.Model):
@@ -41,28 +41,25 @@ with app.app_context():
 
 def cleanup_old_rides():
     """Removes rides that have already departed."""
-    now_utc_ts = int(time.time()) [cite: 1]
-    Ride.query.filter(Ride.departure_ts < now_utc_ts).delete()
+    now_ts = int(time.time())
+    Ride.query.filter(Ride.departure_ts < now_ts).delete()
     db.session.commit()
 
 # --- ROUTES ---
 @app.route("/", methods=["GET", "POST"])
 def index():
     cleanup_old_rides()
-    
     search_query = request.args.get('q', '')
     
     if request.method == "POST":
         try:
-            # Parse user local datetime (France) 
             local_dt = datetime.strptime(
                 request.form["date"] + " " + request.form["time"],
                 "%Y-%m-%d %H:%M"
             ).replace(tzinfo=LOCAL_TZ)
 
-            departure_ts = int(local_dt.timestamp()) [cite: 1]
+            departure_ts = int(local_dt.timestamp())
             
-            # Validation: No past dates
             if departure_ts < time.time():
                 flash("Erreur : La date du trajet est déjà passée.", "danger")
                 return redirect(url_for("index"))
@@ -81,11 +78,10 @@ def index():
             db.session.add(new_ride)
             db.session.commit()
             flash("Trajet publié avec succès !", "success")
-            return redirect(url_for("index")) [cite: 1]
+            return redirect(url_for("index"))
         except Exception as e:
-            flash(f"Erreur lors de l'ajout : {str(e)}", "danger")
+            flash(f"Erreur : {str(e)}", "danger")
 
-    # Fetch rides with optional search filter
     if search_query:
         rides = Ride.query.filter(
             (Ride.destination.ilike(f'%{search_query}%')) | 
