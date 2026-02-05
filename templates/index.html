@@ -1,123 +1,118 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<title>Co-voiturage</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8">
+    <title>🚗 Co-voiturage</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<style>
-body {
-    font-family: system-ui, sans-serif;
-    background: #f5f6f8;
-    margin: 0;
-}
-.container {
-    max-width: 900px;
-    margin: auto;
-    padding: 16px;
-}
-h1 {
-    text-align: center;
-    margin-bottom: 24px;
-}
-.card {
-    background: white;
-    padding: 16px;
-    border-radius: 10px;
-    margin-bottom: 20px;
-    box-shadow: 0 4px 12px rgba(0,0,0,.05);
-}
-h3 {
-    margin-top: 0;
-}
-.grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-}
-input, button {
-    padding: 10px;
-    width: 100%;
-}
-button {
-    background: #2563eb;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-weight: 600;
-}
-.delete {
-    background: #dc2626;
-    margin-top: 8px;
-}
-.ride {
-    border-left: 4px solid #2563eb;
-}
-.notice {
-    background: #e0f2fe;
-    padding: 10px;
-    border-radius: 6px;
-    margin-bottom: 16px;
-}
-@media (max-width: 600px) {
-    .grid { grid-template-columns: 1fr; }
-}
-</style>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #f5f6f8;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,.05);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        input, button {
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            font-size: 15px;
+        }
+
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        .ride {
+            border-left: 5px solid #2563eb;
+            padding: 14px;
+            margin-bottom: 12px;
+            background: white;
+            border-radius: 10px;
+        }
+
+        .ride small {
+            color: #555;
+        }
+
+        .delete {
+            color: red;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        @media (max-width: 700px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
 
 <body>
-<div class="container">
 
 <h1>🚗 Co-voiturage</h1>
 
-{% if key %}
-<div class="notice">
-🔑 <strong>Code de suppression :</strong> {{ key }}<br>
-Conservez-le pour supprimer votre trajet.
-</div>
-{% endif %}
-
 <div class="card">
-<h3>➕ Proposer un trajet</h3>
-<form method="post">
-<div class="grid">
-<input name="name" placeholder="Nom" required>
-<input name="contact" placeholder="Téléphone / Email" required>
-<input name="departure" placeholder="Départ" required>
-<input name="destination" placeholder="Destination" required>
-<input type="date" name="date" required>
-<input type="time" name="time" required>
-<input type="number" name="seats" placeholder="Places" required>
-</div>
-<button>Publier</button>
-</form>
+    <h2>➕ Proposer un trajet</h2>
+    <form method="post" class="grid">
+        <input name="name" placeholder="Nom" required>
+        <input name="contact" placeholder="Téléphone / Email" required>
+        <input name="departure" placeholder="Départ" required>
+        <input name="destination" placeholder="Destination" required>
+        <input type="date" name="date" required>
+        <input type="time" name="time" required>
+        <input type="number" name="seats" placeholder="Places" min="1" required>
+        <button type="submit">Publier</button>
+    </form>
 </div>
 
 <div class="card">
-<h3>🔍 Rechercher</h3>
-<form method="get" class="grid">
-<input name="from" placeholder="Départ">
-<input name="to" placeholder="Destination">
-<button>Filtrer</button>
-</form>
+    <h2>📋 Trajets disponibles</h2>
+
+    {% if rides %}
+        {% for r in rides %}
+            <div class="ride">
+                <strong>{{ r.departure }} → {{ r.destination }}</strong><br>
+                <small>
+                    🕒 {{ r.date }} à {{ r.time }} |
+                    👤 {{ r.name }} |
+                    💺 {{ r.seats }} place(s)
+                </small><br>
+                📞 {{ r.contact }}<br>
+                <a class="delete" href="/delete/{{ r.id }}/{{ r.secret }}">Supprimer</a>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p>Aucun trajet disponible</p>
+    {% endif %}
 </div>
 
-{% for r in rides %}
-<div class="card ride">
-<strong>{{ r.departure }} → {{ r.destination }}</strong><br>
-📅 {{ r.date }} à {{ r.time }} | 👥 {{ r.seats }} place(s)<br>
-👤 {{ r.name }} | 📞 {{ r.contact }}
-
-<form method="post" action="/delete">
-<input type="hidden" name="ride_id" value="{{ r.id }}">
-<input name="secret" placeholder="Code de suppression">
-<button class="delete">Supprimer</button>
-</form>
-</div>
-{% else %}
-<p>Aucun trajet disponible</p>
-{% endfor %}
-
-</div>
 </body>
 </html>
