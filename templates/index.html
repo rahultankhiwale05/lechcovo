@@ -8,21 +8,22 @@
     <style>
         body {
             font-family: system-ui, -apple-system, sans-serif;
-            background: #f5f6f8;
+            background: #f4f6f8;
             margin: 0;
             padding: 20px;
         }
 
         h1 {
             text-align: center;
+            margin-bottom: 20px;
         }
 
         .card {
             background: white;
             padding: 20px;
-            border-radius: 12px;
+            border-radius: 14px;
             margin-bottom: 20px;
-            box-shadow: 0 4px 12px rgba(0,0,0,.05);
+            box-shadow: 0 6px 16px rgba(0,0,0,.06);
         }
 
         .grid {
@@ -43,10 +44,11 @@
             color: white;
             border: none;
             cursor: pointer;
+            grid-column: span 2;
         }
 
         button:hover {
-            background: #1d4ed8;
+            background: #1e40af;
         }
 
         .ride {
@@ -62,7 +64,7 @@
         }
 
         .delete {
-            color: red;
+            color: #dc2626;
             text-decoration: none;
             font-size: 14px;
         }
@@ -70,6 +72,9 @@
         @media (max-width: 700px) {
             .grid {
                 grid-template-columns: 1fr;
+            }
+            button {
+                grid-column: span 1;
             }
         }
     </style>
