@@ -38,8 +38,7 @@ def load_user(user_id):
     cur = conn.cursor(cursor_factory=DictCursor)
     cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
     u = cur.fetchone()
-    cur.close()
-    conn.close()
+    cur.close(); conn.close()
     if u:
         return User(u['id'], u['name'], u['email'], u.get('is_admin', False))
     return None
@@ -57,7 +56,7 @@ def init_db():
             is_admin BOOLEAN DEFAULT FALSE
         )
     """)
-    # 2. Rides Table (Structure updated to match image_76339c.png)
+    # 2. Rides Table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS rides (
             id SERIAL PRIMARY KEY,
@@ -71,9 +70,17 @@ def init_db():
             user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
         )
     """)
+    # 3. Reservations Table (Fixes history and seat counting)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS reservations (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            ride_id INTEGER REFERENCES rides(id) ON DELETE CASCADE,
+            UNIQUE(user_id, ride_id)
+        )
+    """)
     conn.commit()
-    cur.close()
-    conn.close()
+    cur.close(); conn.close()
 
 if DATABASE_URL:
     init_db()
@@ -89,8 +96,7 @@ def index():
         ORDER BY r.departure_ts ASC
     """)
     rides = cur.fetchall()
-    cur.close()
-    conn.close()
+    cur.close(); conn.close()
     return render_template('index.html', rides=rides)
 
 @app.route('/signup', methods=['GET', 'POST'])
@@ -106,7 +112,7 @@ def signup():
             """, (request.form['name'], request.form['email'], 
                   generate_password_hash(request.form['password']), is_admin))
             conn.commit()
-            flash("Compte créé !", "success")
+            flash("Compte créé avec succès !", "success")
             return redirect(url_for('login'))
         except:
             flash("Erreur : l'email existe déjà.")
@@ -153,25 +159,52 @@ def publish():
         flash(f"Erreur : {e}")
     return redirect(url_for('index'))
 
-@app.route("/reserve/<int:ride_id>")
+@app.route('/reserve/<int:ride_id>')
 @login_required
 def reserve(ride_id):
     conn = get_db()
     cur = conn.cursor(cursor_factory=DictCursor)
-    cur.execute("SELECT * FROM rides WHERE id = %s", (ride_id,))
-    ride = cur.fetchone()
-    
-    if ride and ride['user_id'] != current_user.id and ride['seats'] > 0:
-        cur.execute("UPDATE rides SET seats = seats - 1 WHERE id = %s", (ride_id,))
-        conn.commit()
-        flash("Réservation réussie !", "success")
-    elif ride and ride['user_id'] == current_user.id:
-        flash("Vous ne pouvez pas réserver votre propre trajet.")
-    else:
-        flash("Erreur lors de la réservation.")
+    try:
+        # Check seat availability and ownership
+        cur.execute("SELECT seats, user_id FROM rides WHERE id = %s", (ride_id,))
+        ride = cur.fetchone()
         
-    cur.close(); conn.close()
+        if ride and ride['user_id'] != current_user.id and ride['seats'] > 0:
+            # Create reservation record
+            cur.execute("INSERT INTO reservations (user_id, ride_id) VALUES (%s, %s)", (current_user.id, ride_id))
+            # Decrement seats in rides table
+            cur.execute("UPDATE rides SET seats = seats - 1 WHERE id = %s", (ride_id,))
+            conn.commit()
+            flash("Réservation confirmée !", "success")
+        elif ride and ride['user_id'] == current_user.id:
+            flash("Vous ne pouvez pas réserver votre propre trajet.")
+        else:
+            flash("Plus de places disponibles.")
+    except psycopg2.errors.UniqueViolation:
+        flash("Vous avez déjà réservé ce trajet.")
+    except Exception as e:
+        flash(f"Erreur : {e}")
+    finally:
+        cur.close(); conn.close()
     return redirect(url_for("index"))
+
+@app.route('/my-account')
+@login_required
+def my_account():
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=DictCursor)
+    # Rides published by the user
+    cur.execute("SELECT * FROM rides WHERE user_id = %s ORDER BY departure_ts DESC", (current_user.id,))
+    driving = cur.fetchall()
+    # Rides joined by the user
+    cur.execute("""
+        SELECT r.* FROM rides r 
+        JOIN reservations res ON r.id = res.ride_id 
+        WHERE res.user_id = %s ORDER BY r.departure_ts DESC
+    """, (current_user.id,))
+    joined = cur.fetchall()
+    cur.close(); conn.close()
+    return render_template('my_account.html', driving=driving, joined=joined)
 
 @app.route("/delete/<int:ride_id>")
 @login_required

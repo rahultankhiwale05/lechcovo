@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mon Historique - Lechelle Covoit</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: sans-serif; background: #f5f5f7; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .card { background: white; padding: 20px; border-radius: 15px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); border-left: 5px solid #007aff; }
+        .badge { background: #34c759; color: white; padding: 4px 8px; border-radius: 5px; font-size: 11px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" style="text-decoration:none; color:#007aff;">← Retour à l'accueil</a>
+        <h1>Mon Historique</h1>
+
+        <h3>🚗 Mes Annonces (Chauffeur)</h3>
+        {% for r in driving %}
+        <div class="card">
+            <strong>{{ r.departure }} ➔ {{ r.destination }}</strong><br>
+            <small>{{ r.date }} - {{ r.seats }} places restantes</small>
+        </div>
+        {% else %}
+        <p>Vous n'avez publié aucun trajet.</p>
+        {% endfor %}
+
+        <h3 style="margin-top:40px;">🎫 Mes Réservations (Passager)</h3>
+        {% for r in joined %}
+        <div class="card" style="border-left-color: #34c759;">
+            <strong>{{ r.departure }} ➔ {{ r.destination }}</strong><br>
+            <small>{{ r.date }} à {{ r.time }} | Chauffeur: {{ r.contact }}</small>
+            <div style="margin-top:10px;"><span class="badge">RÉSERVÉ</span></div>
+        </div>
+        {% else %}
+        <p>Vous n'avez pas encore réservé de trajets.</p>
+        {% endfor %}
+    </div>
+</body>
+</html>
