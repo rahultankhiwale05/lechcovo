@@ -1,5 +1,4 @@
 import os
-import time
 import secrets
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -13,7 +12,7 @@ from psycopg2.extras import DictCursor
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
 
-# Config
+# Configuration
 DATABASE_URL = os.environ.get('DATABASE_URL')
 ADMIN_SECRET_TOKEN = os.environ.get('ADMIN_SECRET_TOKEN')
 LOCAL_TZ = ZoneInfo("Europe/Paris")
@@ -46,6 +45,7 @@ def load_user(user_id):
 def init_db():
     conn = get_db()
     cur = conn.cursor()
+    # 1. Users Table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
@@ -55,6 +55,7 @@ def init_db():
             is_admin BOOLEAN DEFAULT FALSE
         )
     """)
+    # 2. Rides Table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS rides (
             id SERIAL PRIMARY KEY,
@@ -68,6 +69,12 @@ def init_db():
             user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
         )
     """)
+    # AUTO-FIX: Check if 'active' column exists, if not, add it
+    cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='rides' AND column_name='active';")
+    if not cur.fetchone():
+        cur.execute("ALTER TABLE rides ADD COLUMN active BOOLEAN DEFAULT TRUE;")
+    
+    # 3. Reservations Table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS reservations (
             id SERIAL PRIMARY KEY,
@@ -90,13 +97,13 @@ def index():
         SELECT r.*, u.name as driver_name 
         FROM rides r 
         LEFT JOIN users u ON r.user_id = u.id 
+        WHERE r.active = TRUE 
         ORDER BY r.departure_ts ASC
     """)
     rides = cur.fetchall()
     cur.close(); conn.close()
     return render_template('index.html', rides=rides)
 
-# --- RE-ADDED LOGIN/SIGNUP ROUTES ---
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
@@ -104,16 +111,12 @@ def signup():
         conn = get_db()
         cur = conn.cursor()
         try:
-            cur.execute("""
-                INSERT INTO users (name, email, password, is_admin) 
-                VALUES (%s, %s, %s, %s)
-            """, (request.form['name'], request.form['email'], 
-                  generate_password_hash(request.form['password']), is_admin))
+            cur.execute("INSERT INTO users (name, email, password, is_admin) VALUES (%s, %s, %s, %s)",
+                       (request.form['name'], request.form['email'], generate_password_hash(request.form['password']), is_admin))
             conn.commit()
-            flash("Compte créé !", "success")
             return redirect(url_for('login'))
         except:
-            flash("Erreur : l'email existe déjà.")
+            flash("Email déjà utilisé.")
         finally:
             cur.close(); conn.close()
     return render_template('signup.html')
@@ -129,14 +132,7 @@ def login():
         if u and check_password_hash(u['password'], request.form['password']):
             login_user(User(u['id'], u['name'], u['email'], u['is_admin']))
             return redirect(url_for('index'))
-        flash("Identifiants incorrects.")
     return render_template('login.html')
-
-@app.route('/logout')
-def logout():
-    logout_user()
-    return redirect(url_for('index'))
-# ------------------------------------
 
 @app.route('/publish', methods=['POST'])
 @login_required
@@ -146,16 +142,14 @@ def publish():
         conn = get_db()
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO rides (user_id, departure, destination, date, time, seats, departure_ts, contact)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO rides (user_id, departure, destination, date, time, seats, departure_ts, contact, active)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE)
         """, (current_user.id, request.form["departure"], request.form["destination"],
               request.form["date"], request.form["time"], int(request.form["seats"]),
               int(local_dt.timestamp()), request.form["contact"]))
-        conn.commit()
-        cur.close(); conn.close()
-        flash("Trajet publié !", "success")
+        conn.commit(); cur.close(); conn.close()
     except Exception as e:
-        flash(f"Erreur : {e}")
+        flash(f"Erreur: {e}")
     return redirect(url_for('index'))
 
 @app.route('/reserve/<int:ride_id>')
@@ -164,17 +158,12 @@ def reserve(ride_id):
     conn = get_db()
     cur = conn.cursor(cursor_factory=DictCursor)
     try:
-        cur.execute("SELECT seats, user_id FROM rides WHERE id = %s", (ride_id,))
+        cur.execute("SELECT seats, user_id FROM rides WHERE id = %s AND active = TRUE", (ride_id,))
         ride = cur.fetchone()
         if ride and ride['user_id'] != current_user.id and ride['seats'] > 0:
             cur.execute("INSERT INTO reservations (user_id, ride_id) VALUES (%s, %s)", (current_user.id, ride_id))
             cur.execute("UPDATE rides SET seats = seats - 1 WHERE id = %s", (ride_id,))
             conn.commit()
-            flash("Réservation confirmée !", "success")
-        elif ride and ride['user_id'] == current_user.id:
-            flash("C'est votre trajet !")
-        else:
-            flash("Plus de places.")
     except:
         flash("Déjà réservé.")
     finally:
@@ -201,12 +190,18 @@ def my_account():
 def delete_ride(ride_id):
     conn = get_db()
     cur = conn.cursor()
+    # SOFT DELETE: Sets active to False instead of deleting row
     if current_user.is_admin:
-        cur.execute("DELETE FROM rides WHERE id = %s", (ride_id,))
+        cur.execute("UPDATE rides SET active = FALSE WHERE id = %s", (ride_id,))
     else:
-        cur.execute("DELETE FROM rides WHERE id = %s AND user_id = %s", (ride_id, current_user.id))
+        cur.execute("UPDATE rides SET active = FALSE WHERE id = %s AND user_id = %s", (ride_id, current_user.id))
     conn.commit(); cur.close(); conn.close()
     return redirect(url_for("index"))
+
+@app.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
 
 if __name__ == "__main__":
     app.run()
