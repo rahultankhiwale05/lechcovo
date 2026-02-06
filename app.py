@@ -12,7 +12,6 @@ from psycopg2.extras import DictCursor
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
 
-# Config
 DATABASE_URL = os.environ.get('DATABASE_URL')
 ADMIN_SECRET_TOKEN = os.environ.get('ADMIN_SECRET_TOKEN')
 LOCAL_TZ = ZoneInfo("Europe/Paris")
@@ -29,7 +28,6 @@ class User(UserMixin):
         self.id = id
         self.name = name
         self.email = email
-        # Explicit Boolean conversion to fix the Admin Issue
         self.is_admin = bool(is_admin)
 
 @login_manager.user_loader
@@ -39,27 +37,18 @@ def load_user(user_id):
     cur.execute("SELECT id, name, email, is_admin FROM users WHERE id = %s", (user_id,))
     u = cur.fetchone()
     cur.close(); conn.close()
-    if u:
-        return User(u['id'], u['name'], u['email'], u['is_admin'])
+    if u: return User(u['id'], u['name'], u['email'], u['is_admin'])
     return None
 
 def init_db():
     conn = get_db()
     cur = conn.cursor()
-    # 1. Users Table
     cur.execute("CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password TEXT NOT NULL, is_admin BOOLEAN DEFAULT FALSE)")
-    # 2. Rides Table
-    cur.execute("CREATE TABLE IF NOT EXISTS rides (id SERIAL PRIMARY KEY, departure TEXT NOT NULL, destination TEXT NOT NULL, date TEXT NOT NULL, time TEXT NOT NULL, seats INTEGER NOT NULL, departure_ts INTEGER NOT NULL, contact TEXT NOT NULL, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE)")
-    # AUTO-FIX: Check if 'active' column exists
-    cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='rides' AND column_name='active';")
-    if not cur.fetchone():
-        cur.execute("ALTER TABLE rides ADD COLUMN active BOOLEAN DEFAULT TRUE;")
-    # 3. Reservations Table (with Status for Waitlist)
+    cur.execute("CREATE TABLE IF NOT EXISTS rides (id SERIAL PRIMARY KEY, departure TEXT NOT NULL, destination TEXT NOT NULL, date TEXT NOT NULL, time TEXT NOT NULL, seats INTEGER NOT NULL, departure_ts INTEGER NOT NULL, contact TEXT NOT NULL, active BOOLEAN DEFAULT TRUE, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE)")
     cur.execute("CREATE TABLE IF NOT EXISTS reservations (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, ride_id INTEGER REFERENCES rides(id) ON DELETE CASCADE, status TEXT DEFAULT 'confirmed', UNIQUE(user_id, ride_id))")
     conn.commit(); cur.close(); conn.close()
 
-if DATABASE_URL:
-    init_db()
+if DATABASE_URL: init_db()
 
 @app.route('/')
 def index():
@@ -73,7 +62,6 @@ def index():
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
-        # Admin recognition during signup
         is_admin = (request.form.get('admin_token') == ADMIN_SECRET_TOKEN) if ADMIN_SECRET_TOKEN else False
         conn = get_db()
         cur = conn.cursor()
@@ -99,22 +87,34 @@ def login():
             return redirect(url_for('index'))
     return render_template('login.html')
 
+@app.route('/publish', methods=['POST'])
+@login_required
+def publish():
+    try:
+        dt_str = f"{request.form['date']} {request.form['time']}"
+        local_dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M").replace(tzinfo=LOCAL_TZ)
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("INSERT INTO rides (user_id, departure, destination, date, time, seats, departure_ts, contact) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                   (current_user.id, request.form['departure'], request.form['destination'], request.form['date'], request.form['time'], int(request.form['seats']), int(local_dt.timestamp()), request.form['contact']))
+        conn.commit(); cur.close(); conn.close()
+    except Exception as e: flash(f"Erreur: {e}")
+    return redirect(url_for('index'))
+
 @app.route('/reserve/<int:ride_id>')
 @login_required
 def reserve(ride_id):
     conn = get_db()
     cur = conn.cursor(cursor_factory=DictCursor)
     try:
-        cur.execute("SELECT seats, user_id FROM rides WHERE id = %s AND active = TRUE", (ride_id,))
+        cur.execute("SELECT seats, user_id FROM rides WHERE id = %s", (ride_id,))
         ride = cur.fetchone()
         if ride and ride['user_id'] != current_user.id:
-            # Waitlist logic
             status = 'confirmed' if ride['seats'] > 0 else 'waiting'
             cur.execute("INSERT INTO reservations (user_id, ride_id, status) VALUES (%s, %s, %s)", (current_user.id, ride_id, status))
             if status == 'confirmed':
                 cur.execute("UPDATE rides SET seats = seats - 1 WHERE id = %s", (ride_id,))
             conn.commit()
-            flash("Action réussie !")
     except: flash("Déjà inscrit.")
     finally: cur.close(); conn.close()
     return redirect(url_for("index"))
@@ -131,7 +131,6 @@ def unreserve(ride_id):
         cur.execute("DELETE FROM reservations WHERE user_id = %s AND ride_id = %s", (current_user.id, ride_id))
         if was_confirmed:
             cur.execute("UPDATE rides SET seats = seats + 1 WHERE id = %s", (ride_id,))
-            # Pass seat to next on waitlist
             cur.execute("SELECT id FROM reservations WHERE ride_id = %s AND status = 'waiting' ORDER BY id ASC LIMIT 1", (ride_id,))
             waiter = cur.fetchone()
             if waiter:
@@ -141,25 +140,11 @@ def unreserve(ride_id):
     cur.close(); conn.close()
     return redirect(url_for("my_account"))
 
-@app.route('/publish', methods=['POST'])
-@login_required
-def publish():
-    try:
-        local_dt = datetime.strptime(request.form["date"] + " " + request.form["time"], "%Y-%m-%d %H:%M").replace(tzinfo=LOCAL_TZ)
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("INSERT INTO rides (user_id, departure, destination, date, time, seats, departure_ts, contact, active) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE)",
-                   (current_user.id, request.form["departure"], request.form["destination"], request.form["date"], request.form["time"], int(request.form["seats"]), int(local_dt.timestamp()), request.form["contact"]))
-        conn.commit(); cur.close(); conn.close()
-    except Exception as e: flash(f"Erreur: {e}")
-    return redirect(url_for('index'))
-
 @app.route("/delete/<int:ride_id>")
 @login_required
 def delete_ride(ride_id):
     conn = get_db()
     cur = conn.cursor()
-    # Admin Permission Fix
     if current_user.is_admin:
         cur.execute("UPDATE rides SET active = FALSE WHERE id = %s", (ride_id,))
     else:
