@@ -18,7 +18,6 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 ADMIN_SECRET_TOKEN = os.environ.get('ADMIN_SECRET_TOKEN')
 LOCAL_TZ = ZoneInfo("Europe/Paris")
 
-# Flask-Login Setup
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
@@ -48,7 +47,7 @@ def load_user(user_id):
 def init_db():
     conn = get_db()
     cur = conn.cursor()
-    # Create Users Table
+    # 1. Users table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
@@ -58,7 +57,7 @@ def init_db():
             is_admin BOOLEAN DEFAULT FALSE
         )
     """)
-    # Create Rides Table
+    # 2. Rides table (Note: 'name' is removed or made optional here)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS rides (
             id SERIAL PRIMARY KEY,
@@ -72,14 +71,17 @@ def init_db():
             user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
         )
     """)
-    # Migration: Ensure user_id and is_admin exist
+    # 3. MIGRATION: Fix the 'NotNullViolation' by making 'name' optional in the DB
     cur.execute("""
         DO $$ 
         BEGIN 
-            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='is_admin') THEN
-                ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE;
+            IF EXISTS (SELECT 1 FROM information_schema.columns 
+                       WHERE table_name='rides' AND column_name='name') THEN
+                ALTER TABLE rides ALTER COLUMN name DROP NOT NULL;
             END IF;
-            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='rides' AND column_name='user_id') THEN
+            
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                           WHERE table_name='rides' AND column_name='user_id') THEN
                 ALTER TABLE rides ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
             END IF;
         END $$;
@@ -88,28 +90,14 @@ def init_db():
     cur.close()
     conn.close()
 
-def cleanup_old_rides():
-    now_ts = int(time.time())
-    try:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("DELETE FROM rides WHERE departure_ts < %s", (now_ts,))
-        conn.commit()
-        cur.close()
-        conn.close()
-    except Exception as e:
-        print(f"Cleanup error: {e}")
-
 if DATABASE_URL:
     init_db()
 
-# --- ROUTES ---
-
 @app.route('/')
 def index():
-    cleanup_old_rides()
     conn = get_db()
     cur = conn.cursor(cursor_factory=DictCursor)
+    # Using a LEFT JOIN ensures we get the driver name from the users table
     cur.execute("""
         SELECT r.*, u.name as driver_name 
         FROM rides r 
@@ -124,29 +112,24 @@ def index():
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
-        name = request.form['name']
-        email = request.form['email']
-        password = generate_password_hash(request.form['password'])
-        
-        # Admin Logic from Env Variable
         user_token = request.form.get('admin_token')
-        is_admin = False
-        if ADMIN_SECRET_TOKEN and user_token == ADMIN_SECRET_TOKEN:
-            is_admin = True
-
+        is_admin = (ADMIN_SECRET_TOKEN and user_token == ADMIN_SECRET_TOKEN)
+        
         conn = get_db()
         cur = conn.cursor()
         try:
-            cur.execute("INSERT INTO users (name, email, password, is_admin) VALUES (%s, %s, %s, %s)", 
-                        (name, email, password, is_admin))
+            cur.execute("""
+                INSERT INTO users (name, email, password, is_admin) 
+                VALUES (%s, %s, %s, %s)
+            """, (request.form['name'], request.form['email'], 
+                  generate_password_hash(request.form['password']), is_admin))
             conn.commit()
             flash("Compte créé !", "success")
             return redirect(url_for('login'))
         except:
-            flash("Email déjà utilisé.", "error")
+            flash("Erreur : l'email existe peut-être déjà.")
         finally:
-            cur.close()
-            conn.close()
+            cur.close(); conn.close()
     return render_template('signup.html')
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -156,13 +139,13 @@ def login():
         cur = conn.cursor(cursor_factory=DictCursor)
         cur.execute("SELECT * FROM users WHERE email = %s", (request.form['email'],))
         u = cur.fetchone()
-        cur.close()
-        conn.close()
+        cur.close(); conn.close()
+        
         if u and check_password_hash(u['password'], request.form['password']):
             user_obj = User(u['id'], u['name'], u['email'], u['is_admin'])
             login_user(user_obj)
             return redirect(url_for('index'))
-        flash("Identifiants incorrects.", "error")
+        flash("Email ou mot de passe incorrect.")
     return render_template('login.html')
 
 @app.route('/logout')
@@ -173,19 +156,26 @@ def logout():
 @app.route('/publish', methods=['POST'])
 @login_required
 def publish():
-    local_dt = datetime.strptime(request.form["date"] + " " + request.form["time"], "%Y-%m-%d %H:%M").replace(tzinfo=LOCAL_TZ)
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO rides (user_id, departure, destination, date, time, seats, departure_ts, contact)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-    """, (current_user.id, request.form["departure"], request.form["destination"],
-          request.form["date"], request.form["time"], int(request.form["seats"]),
-          int(local_dt.timestamp()), request.form["contact"]))
-    conn.commit()
-    cur.close()
-    conn.close()
-    flash("Trajet publié !", "success")
+    try:
+        local_dt = datetime.strptime(
+            request.form["date"] + " " + request.form["time"],
+            "%Y-%m-%d %H:%M"
+        ).replace(tzinfo=LOCAL_TZ)
+
+        conn = get_db()
+        cur = conn.cursor()
+        # We only send columns that exist and aren't 'name'
+        cur.execute("""
+            INSERT INTO rides (user_id, departure, destination, date, time, seats, departure_ts, contact)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (current_user.id, request.form["departure"], request.form["destination"],
+              request.form["date"], request.form["time"], int(request.form["seats"]),
+              int(local_dt.timestamp()), request.form["contact"]))
+        conn.commit()
+        cur.close(); conn.close()
+        flash("Trajet publié !", "success")
+    except Exception as e:
+        flash(f"Erreur lors de la publication : {e}")
     return redirect(url_for('index'))
 
 @app.route("/reserve/<int:ride_id>")
@@ -194,8 +184,7 @@ def reserve(ride_id):
     cur = conn.cursor()
     cur.execute("UPDATE rides SET seats = seats - 1 WHERE id = %s AND seats > 0", (ride_id,))
     conn.commit()
-    cur.close()
-    conn.close()
+    cur.close(); conn.close()
     return redirect(url_for("index"))
 
 @app.route("/delete/<int:ride_id>")
@@ -208,8 +197,7 @@ def delete_ride(ride_id):
     else:
         cur.execute("DELETE FROM rides WHERE id = %s AND user_id = %s", (ride_id, current_user.id))
     conn.commit()
-    cur.close()
-    conn.close()
+    cur.close(); conn.close()
     return redirect(url_for("index"))
 
 if __name__ == "__main__":
