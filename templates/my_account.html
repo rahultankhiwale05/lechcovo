@@ -1,39 +1,59 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
+    <meta charset="UTF-8">
     <title>Mon Historique - Lechelle Covoit</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { font-family: sans-serif; background: #f5f5f7; padding: 20px; }
+        body { font-family: -apple-system, sans-serif; background: #f5f5f7; padding: 20px; color: #1d1d1f; }
         .container { max-width: 800px; margin: 0 auto; }
-        .card { background: white; padding: 20px; border-radius: 15px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); border-left: 5px solid #007aff; }
-        .badge { background: #34c759; color: white; padding: 4px 8px; border-radius: 5px; font-size: 11px; font-weight: bold; }
+        .section-title { margin-top: 40px; border-bottom: 2px solid #ddd; padding-bottom: 10px; }
+        .card { background: white; padding: 20px; border-radius: 15px; margin-bottom: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; }
+        .archived { opacity: 0.5; background: #fafafa; }
+        .status-badge { font-size: 0.7em; padding: 4px 8px; border-radius: 6px; font-weight: bold; }
+        .status-confirmed { background: #e3f2fd; color: #007aff; }
+        .status-waiting { background: #fff3e0; color: #ef6c00; }
+        .btn-cancel { color: #ff3b30; text-decoration: none; font-weight: 600; font-size: 0.9em; }
     </style>
 </head>
 <body>
     <div class="container">
-        <a href="/" style="text-decoration:none; color:#007aff;">← Retour à l'accueil</a>
-        <h1>Mon Historique</h1>
+        <a href="/" style="text-decoration:none; color:#007aff; font-weight:500;">← Retour à l'accueil</a>
+        <h1>Mon Espace</h1>
 
-        <h3>🚗 Mes Annonces (Chauffeur)</h3>
+        <h3 class="section-title">🚗 Mes Annonces (Conducteur)</h3>
         {% for r in driving %}
-        <div class="card">
-            <strong>{{ r.departure }} ➔ {{ r.destination }}</strong><br>
-            <small>{{ r.date }} - {{ r.seats }} places restantes</small>
+        <div class="card {{ '' if r.active else 'archived' }}">
+            <div>
+                <strong>{{ r.departure }} ➔ {{ r.destination }}</strong><br>
+                <small>{{ r.date }} | {{ r.seats }} places</small>
+            </div>
+            {% if not r.active %}<span style="color:#8e8e93; font-weight:bold;">ARCHIVÉ</span>{% endif %}
         </div>
         {% else %}
-        <p>Vous n'avez publié aucun trajet.</p>
+            <p>Vous n'avez publié aucun trajet.</p>
         {% endfor %}
 
-        <h3 style="margin-top:40px;">🎫 Mes Réservations (Passager)</h3>
+        <h3 class="section-title">🎫 Mes Réservations (Passager)</h3>
         {% for r in joined %}
-        <div class="card" style="border-left-color: #34c759;">
-            <strong>{{ r.departure }} ➔ {{ r.destination }}</strong><br>
-            <small>{{ r.date }} à {{ r.time }} | Chauffeur: {{ r.contact }}</small>
-            <div style="margin-top:10px;"><span class="badge">RÉSERVÉ</span></div>
+        <div class="card {{ '' if r.active else 'archived' }}">
+            <div>
+                <strong>{{ r.departure }} ➔ {{ r.destination }}</strong><br>
+                <small>{{ r.date }} | Contact: {{ r.contact }}</small><br>
+                <span class="status-badge {{ 'status-confirmed' if r.status == 'confirmed' else 'status-waiting' }}">
+                    {{ 'CONFIRMÉ' if r.status == 'confirmed' else 'LISTE D\'ATTENTE' }}
+                </span>
+            </div>
+            {% if r.active %}
+                <a href="{{ url_for('unreserve', ride_id=r.id) }}" 
+                   onclick="return confirm('Annuler votre place ? Cela pourrait profiter à quelqu\'un en liste d\'attente.')" 
+                   class="btn-cancel">Annuler</a>
+            {% else %}
+                <span style="color:#8e8e93;">TERMINÉ</span>
+            {% endif %}
         </div>
         {% else %}
-        <p>Vous n'avez pas encore réservé de trajets.</p>
+            <p>Vous n'avez aucune réservation en cours.</p>
         {% endfor %}
     </div>
 </body>

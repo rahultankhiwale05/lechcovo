@@ -12,7 +12,6 @@ from psycopg2.extras import DictCursor
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
 
-# Configuration
 DATABASE_URL = os.environ.get('DATABASE_URL')
 ADMIN_SECRET_TOKEN = os.environ.get('ADMIN_SECRET_TOKEN')
 LOCAL_TZ = ZoneInfo("Europe/Paris")
@@ -38,72 +37,86 @@ def load_user(user_id):
     cur.execute("SELECT id, name, email, is_admin FROM users WHERE id = %s", (user_id,))
     u = cur.fetchone()
     cur.close(); conn.close()
-    if u:
-        return User(u['id'], u['name'], u['email'], u['is_admin'])
+    if u: return User(u['id'], u['name'], u['email'], u['is_admin'])
     return None
 
 def init_db():
     conn = get_db()
     cur = conn.cursor()
-    # 1. Users Table
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            name TEXT NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            is_admin BOOLEAN DEFAULT FALSE
-        )
-    """)
-    # 2. Rides Table
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS rides (
-            id SERIAL PRIMARY KEY,
-            departure TEXT NOT NULL,
-            destination TEXT NOT NULL,
-            date TEXT NOT NULL,
-            time TEXT NOT NULL,
-            seats INTEGER NOT NULL,
-            departure_ts INTEGER NOT NULL,
-            contact TEXT NOT NULL,
-            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
-        )
-    """)
-    # AUTO-FIX: Check if 'active' column exists, if not, add it
-    cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='rides' AND column_name='active';")
-    if not cur.fetchone():
-        cur.execute("ALTER TABLE rides ADD COLUMN active BOOLEAN DEFAULT TRUE;")
+    cur.execute("CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password TEXT NOT NULL, is_admin BOOLEAN DEFAULT FALSE)")
+    cur.execute("CREATE TABLE IF NOT EXISTS rides (id SERIAL PRIMARY KEY, departure TEXT NOT NULL, destination TEXT NOT NULL, date TEXT NOT NULL, time TEXT NOT NULL, seats INTEGER NOT NULL, departure_ts INTEGER NOT NULL, contact TEXT NOT NULL, active BOOLEAN DEFAULT TRUE, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE)")
     
-    # 3. Reservations Table
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS reservations (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            ride_id INTEGER REFERENCES rides(id) ON DELETE CASCADE,
-            UNIQUE(user_id, ride_id)
-        )
-    """)
-    conn.commit()
-    cur.close(); conn.close()
+    # Check for active column
+    cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='rides' AND column_name='active';")
+    if not cur.fetchone(): cur.execute("ALTER TABLE rides ADD COLUMN active BOOLEAN DEFAULT TRUE;")
+    
+    cur.execute("CREATE TABLE IF NOT EXISTS reservations (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, ride_id INTEGER REFERENCES rides(id) ON DELETE CASCADE, status TEXT DEFAULT 'confirmed', UNIQUE(user_id, ride_id))")
+    
+    # Check for status column in reservations (Waitlist feature)
+    cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='reservations' AND column_name='status';")
+    if not cur.fetchone(): cur.execute("ALTER TABLE reservations ADD COLUMN status TEXT DEFAULT 'confirmed';")
+    
+    conn.commit(); cur.close(); conn.close()
 
-if DATABASE_URL:
-    init_db()
+if DATABASE_URL: init_db()
 
 @app.route('/')
 def index():
     conn = get_db()
     cur = conn.cursor(cursor_factory=DictCursor)
-    cur.execute("""
-        SELECT r.*, u.name as driver_name 
-        FROM rides r 
-        LEFT JOIN users u ON r.user_id = u.id 
-        WHERE r.active = TRUE 
-        ORDER BY r.departure_ts ASC
-    """)
+    cur.execute("SELECT r.*, u.name as driver_name FROM rides r LEFT JOIN users u ON r.user_id = u.id WHERE r.active = TRUE ORDER BY r.departure_ts ASC")
     rides = cur.fetchall()
     cur.close(); conn.close()
     return render_template('index.html', rides=rides)
 
+@app.route('/reserve/<int:ride_id>')
+@login_required
+def reserve(ride_id):
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=DictCursor)
+    try:
+        cur.execute("SELECT seats, user_id FROM rides WHERE id = %s", (ride_id,))
+        ride = cur.fetchone()
+        if ride and ride['user_id'] != current_user.id:
+            status = 'confirmed' if ride['seats'] > 0 else 'waiting'
+            cur.execute("INSERT INTO reservations (user_id, ride_id, status) VALUES (%s, %s, %s)", (current_user.id, ride_id, status))
+            if status == 'confirmed':
+                cur.execute("UPDATE rides SET seats = seats - 1 WHERE id = %s", (ride_id,))
+                flash("Place réservée !", "success")
+            else:
+                flash("Plus de place, vous êtes sur liste d'attente.", "info")
+            conn.commit()
+    except: flash("Déjà inscrit à ce trajet.")
+    finally: cur.close(); conn.close()
+    return redirect(url_for("index"))
+
+@app.route('/unreserve/<int:ride_id>')
+@login_required
+def unreserve(ride_id):
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=DictCursor)
+    # Check reservation status
+    cur.execute("SELECT status FROM reservations WHERE user_id = %s AND ride_id = %s", (current_user.id, ride_id))
+    res = cur.fetchone()
+    if res:
+        was_confirmed = (res['status'] == 'confirmed')
+        cur.execute("DELETE FROM reservations WHERE user_id = %s AND ride_id = %s", (current_user.id, ride_id))
+        
+        if was_confirmed:
+            # Add seat back
+            cur.execute("UPDATE rides SET seats = seats + 1 WHERE id = %s", (ride_id,))
+            # Give seat to first person on waitlist
+            cur.execute("SELECT id, user_id FROM reservations WHERE ride_id = %s AND status = 'waiting' ORDER BY id ASC LIMIT 1", (ride_id,))
+            waiter = cur.fetchone()
+            if waiter:
+                cur.execute("UPDATE reservations SET status = 'confirmed' WHERE id = %s", (waiter['id'],))
+                cur.execute("UPDATE rides SET seats = seats - 1 WHERE id = %s", (ride_id,))
+        conn.commit()
+        flash("Annulation effectuée.")
+    cur.close(); conn.close()
+    return redirect(url_for("my_account"))
+
+# (Standard signup/login/publish/delete routes remain as before...)
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
@@ -115,10 +128,8 @@ def signup():
                        (request.form['name'], request.form['email'], generate_password_hash(request.form['password']), is_admin))
             conn.commit()
             return redirect(url_for('login'))
-        except:
-            flash("Email déjà utilisé.")
-        finally:
-            cur.close(); conn.close()
+        except: flash("Email utilisé.")
+        finally: cur.close(); conn.close()
     return render_template('signup.html')
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -141,34 +152,11 @@ def publish():
         local_dt = datetime.strptime(request.form["date"] + " " + request.form["time"], "%Y-%m-%d %H:%M").replace(tzinfo=LOCAL_TZ)
         conn = get_db()
         cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO rides (user_id, departure, destination, date, time, seats, departure_ts, contact, active)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE)
-        """, (current_user.id, request.form["departure"], request.form["destination"],
-              request.form["date"], request.form["time"], int(request.form["seats"]),
-              int(local_dt.timestamp()), request.form["contact"]))
+        cur.execute("INSERT INTO rides (user_id, departure, destination, date, time, seats, departure_ts, contact, active) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE)",
+                   (current_user.id, request.form["departure"], request.form["destination"], request.form["date"], request.form["time"], int(request.form["seats"]), int(local_dt.timestamp()), request.form["contact"]))
         conn.commit(); cur.close(); conn.close()
-    except Exception as e:
-        flash(f"Erreur: {e}")
+    except Exception as e: flash(f"Erreur: {e}")
     return redirect(url_for('index'))
-
-@app.route('/reserve/<int:ride_id>')
-@login_required
-def reserve(ride_id):
-    conn = get_db()
-    cur = conn.cursor(cursor_factory=DictCursor)
-    try:
-        cur.execute("SELECT seats, user_id FROM rides WHERE id = %s AND active = TRUE", (ride_id,))
-        ride = cur.fetchone()
-        if ride and ride['user_id'] != current_user.id and ride['seats'] > 0:
-            cur.execute("INSERT INTO reservations (user_id, ride_id) VALUES (%s, %s)", (current_user.id, ride_id))
-            cur.execute("UPDATE rides SET seats = seats - 1 WHERE id = %s", (ride_id,))
-            conn.commit()
-    except:
-        flash("Déjà réservé.")
-    finally:
-        cur.close(); conn.close()
-    return redirect(url_for("index"))
 
 @app.route('/my-account')
 @login_required
@@ -177,10 +165,7 @@ def my_account():
     cur = conn.cursor(cursor_factory=DictCursor)
     cur.execute("SELECT * FROM rides WHERE user_id = %s ORDER BY departure_ts DESC", (current_user.id,))
     driving = cur.fetchall()
-    cur.execute("""
-        SELECT r.* FROM rides r JOIN reservations res ON r.id = res.ride_id 
-        WHERE res.user_id = %s ORDER BY r.departure_ts DESC
-    """, (current_user.id,))
+    cur.execute("SELECT r.*, res.status FROM rides r JOIN reservations res ON r.id = res.ride_id WHERE res.user_id = %s ORDER BY r.departure_ts DESC", (current_user.id,))
     joined = cur.fetchall()
     cur.close(); conn.close()
     return render_template('my_account.html', driving=driving, joined=joined)
@@ -190,11 +175,8 @@ def my_account():
 def delete_ride(ride_id):
     conn = get_db()
     cur = conn.cursor()
-    # SOFT DELETE: Sets active to False instead of deleting row
-    if current_user.is_admin:
-        cur.execute("UPDATE rides SET active = FALSE WHERE id = %s", (ride_id,))
-    else:
-        cur.execute("UPDATE rides SET active = FALSE WHERE id = %s AND user_id = %s", (ride_id, current_user.id))
+    if current_user.is_admin: cur.execute("UPDATE rides SET active = FALSE WHERE id = %s", (ride_id,))
+    else: cur.execute("UPDATE rides SET active = FALSE WHERE id = %s AND user_id = %s", (ride_id, current_user.id))
     conn.commit(); cur.close(); conn.close()
     return redirect(url_for("index"))
 
