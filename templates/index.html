@@ -6,89 +6,121 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        :root { --glass: rgba(255, 255, 255, 0.95); --accent: #007aff; --bg: #f5f5f7; }
-        body { margin: 0; padding: 0; font-family: -apple-system, sans-serif; background: var(--bg); }
+        :root { --glass: rgba(255, 255, 255, 0.95); --accent: #007aff; --bg: #f5f5f7; --text: #1d1d1f; }
+        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
         
-        /* New Hero Section */
+        /* Hero Section */
         .hero { 
-            background: linear-gradient(rgba(0,122,255,0.8), rgba(0,122,255,0.6)), url('/static/carte-postale-ancienne-lechelle-20_0.jpg') center/cover;
-            color: white; padding: 60px 20px; text-align: center; margin-bottom: 40px;
+            background: linear-gradient(rgba(0,122,255,0.85), rgba(0,122,255,0.7)), url('https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?auto=format&fit=crop&q=80&w=1000') center/cover;
+            color: white; padding: 80px 20px; text-align: center;
         }
-        .hero h1 { margin: 0; font-size: 2.5em; }
-        .hero p { font-size: 1.2em; opacity: 0.9; }
+        .hero h1 { margin: 0; font-size: 2.8em; font-weight: 800; letter-spacing: -0.5px; }
+        .hero p { font-size: 1.25em; opacity: 0.9; margin-top: 10px; max-width: 600px; margin-left: auto; margin-right: auto; }
 
         .container { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
-        .nav { display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px 25px; border-radius: 0 0 15px 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 0; }
         
-        /* Empty State Styling */
-        .empty-state { text-align: center; padding: 80px 20px; background: white; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-        .empty-state h2 { color: #333; }
-        .empty-state p { color: #666; margin-bottom: 25px; }
+        /* Sticky Nav */
+        .nav { display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px 25px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 1000; }
+        .nav a { color: var(--accent); text-decoration: none; font-weight: 600; margin-left: 15px; }
+        
+        /* How It Works Section */
+        .how-it-works { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 30px; margin: 60px 0; text-align: center; }
+        .step-card { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
+        .step-icon { font-size: 40px; margin-bottom: 15px; display: block; }
+        .step-card h3 { margin: 10px 0; font-size: 1.2em; }
+        .step-card p { color: #666; font-size: 0.95em; }
 
-        .ride-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; padding-bottom: 40px; }
-        .card { background: white; border-radius: 18px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.08); transition: 0.3s; }
-        .btn { border: none; padding: 12px 25px; border-radius: 10px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; }
+        /* Rides Grid */
+        .section-title { font-size: 1.8em; margin: 40px 0 20px; font-weight: 700; }
+        .ride-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 25px; padding-bottom: 60px; }
+        .card { background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05); transition: transform 0.3s ease; }
+        .card:hover { transform: translateY(-5px); }
+        .map { height: 160px; background: #e5e5ea; }
+        
+        /* Form Styling */
+        .publish-form { background: white; padding: 30px; border-radius: 24px; margin-top: -40px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); position: relative; z-index: 10; border: 1px solid rgba(0,0,0,0.05); }
+        input { padding: 14px; border-radius: 12px; border: 1px solid #d2d2d7; width: 100%; box-sizing: border-box; font-size: 16px; }
+        .btn { border: none; padding: 14px 28px; border-radius: 12px; font-weight: 600; cursor: pointer; text-decoration: none; transition: 0.2s; text-align: center; }
         .btn-primary { background: var(--accent); color: white; }
-        .btn-outline { border: 2px solid var(--accent); color: var(--accent); }
+        .btn-primary:hover { background: #0063cc; }
+
+        /* Empty State */
+        .empty-state { text-align: center; padding: 60px 20px; background: #fff; border-radius: 24px; border: 2px dashed #d2d2d7; margin: 40px 0; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div class="nav">
-        <strong>🚗 Lechelle Covoit</strong>
+<div class="nav">
+    <div class="container" style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+        <strong style="font-size: 1.2em;">🚗 Lechelle Covoit</strong>
         <div>
             {% if current_user.is_authenticated %}
-                <span>Bonjour, {{ current_user.name }}</span> | <a href="/logout">Déconnexion</a>
+                <span style="color:#666;">{{ current_user.name }}</span>
+                <a href="/logout">Déconnexion</a>
             {% else %}
-                <a href="/login">Connexion</a> | <a href="/signup">Inscription</a>
+                <a href="/login">Connexion</a>
+                <a href="/signup" style="background:var(--accent); color:white; padding:8px 16px; border-radius:8px;">S'inscrire</a>
             {% endif %}
         </div>
     </div>
 </div>
 
 <div class="hero">
-    <h1>Voyagez ensemble</h1>
-    <p>Le moyen le plus simple et écologique pour vos trajets quotidiens.</p>
-    {% if not current_user.is_authenticated %}
-        <div style="margin-top: 20px;">
-            <a href="/signup" class="btn" style="background:white; color:var(--accent);">Commencer maintenant</a>
-        </div>
-    {% endif %}
+    <div class="container">
+        <h1>Le covoiturage pour commune de Léchelle.</h1>
+        <p>Réduisez vos frais, rencontrez vos voisins et voyagez plus sereinement.</p>
+    </div>
 </div>
 
 <div class="container">
-    {% with messages = get_flashed_messages() %}{% if messages %}
-        {% for m in messages %}<div style="background:var(--accent); color:white; padding:15px; border-radius:10px; margin-bottom:20px;">{{ m }}</div>{% endfor %}
-    {% endif %}{% endwith %}
-
     {% if current_user.is_authenticated %}
-    <div style="background:white; padding:25px; border-radius:18px; margin-bottom:40px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-        <h3>Proposer un trajet</h3>
-        <form action="/publish" method="post" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;">
-            <input name="departure" placeholder="Ville de départ" required style="padding:12px; border-radius:10px; border:1px solid #ddd;">
-            <input name="destination" placeholder="Destination" required style="padding:12px; border-radius:10px; border:1px solid #ddd;">
-            <input name="contact" placeholder="Tél" required style="padding:12px; border-radius:10px; border:1px solid #ddd;">
-            <input type="date" name="date" required style="padding:12px; border-radius:10px; border:1px solid #ddd;">
-            <input type="time" name="time" required style="padding:12px; border-radius:10px; border:1px solid #ddd;">
-            <input type="number" name="seats" placeholder="Places" min="1" required style="padding:12px; border-radius:10px; border:1px solid #ddd;">
+    <div class="publish-form">
+        <h3 style="margin-top:0;">Proposer un trajet</h3>
+        <form action="/publish" method="post" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+            <input name="departure" placeholder="Départ" required>
+            <input name="destination" placeholder="Arrivée" required>
+            <input name="contact" placeholder="Tél/WhatsApp" required>
+            <input type="date" name="date" required>
+            <input type="time" name="time" required>
+            <input type="number" name="seats" placeholder="Places" min="1" required>
             <button type="submit" class="btn btn-primary">Publier</button>
         </form>
     </div>
     {% endif %}
 
+    <div class="how-it-works">
+        <div class="step-card">
+            <span class="step-icon">📱</span>
+            <h3>Inscrivez-vous</h3>
+            <p>Créez un compte gratuitement pour commencer à publier ou réserver.</p>
+        </div>
+        <div class="step-card">
+            <span class="step-icon">📍</span>
+            <h3>Proposez ou Cherchez</h3>
+            <p>Indiquez votre itinéraire ou trouvez un trajet qui correspond à vos horaires.</p>
+        </div>
+        <div class="step-card">
+            <span class="step-icon">🤝</span>
+            <h3>Voyagez</h3>
+            <p>Contactez le chauffeur, validez les détails et partagez la route !</p>
+        </div>
+    </div>
+
+    <div class="section-title">Trajets disponibles</div>
+    
     {% if rides %}
         <div class="ride-grid">
             {% for r in rides %}
             <div class="card">
-                <div id="map_{{ r.id }}" style="height:150px; background:#eee;" data-dep="{{ r.departure }}" data-dest="{{ r.destination }}"></div>
-                <div style="padding:15px;">
-                    <strong>{{ r.departure }} ➔ {{ r.destination }}</strong>
-                    <p style="font-size:0.9em; color:#666;">📅 {{ r.date }} à {{ r.time }}</p>
+                <div id="map_{{ r.id }}" class="map" data-dep="{{ r.departure }}" data-dest="{{ r.destination }}"></div>
+                <div class="p-15" style="padding:20px;">
+                    <div style="font-weight:700; font-size:1.15em; margin-bottom:5px;">{{ r.departure }} ➔ {{ r.destination }}</div>
+                    <div style="color:#666; font-size:0.95em; margin-bottom:15px;">📅 {{ r.date }} à {{ r.time }}</div>
+                    
                     <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span>Places: {{ r.seats }}</span>
+                        <span style="font-size:0.9em; color:#1d1d1f;">💺 {{ r.seats }} places libres</span>
                         {% if current_user.is_authenticated %}
-                            <a href="{{ url_for('reserve', ride_id=r.id) }}" class="btn btn-primary" style="padding:8px 15px; font-size:0.9em;">Réserver</a>
+                            <a href="{{ url_for('reserve', ride_id=r.id) }}" class="btn btn-primary" style="padding:10px 20px; font-size:0.9em;">Réserver</a>
                         {% endif %}
                     </div>
                 </div>
@@ -97,12 +129,13 @@
         </div>
     {% else %}
         <div class="empty-state">
-            <h2>Aucun trajet disponible</h2>
-            <p>Il n'y a pas encore de trajets prévus. Soyez le premier à en proposer un ou revenez plus tard !</p>
+            <div style="font-size: 50px; margin-bottom: 10px;">🍃</div>
+            <h2>C'est bien calme ici...</h2>
+            <p>Aucun trajet n'est disponible pour le moment.</p>
             {% if current_user.is_authenticated %}
-                <p>💡 Remplissez le formulaire ci-dessus pour commencer.</p>
+                <p style="color:var(--accent); font-weight:600;">Utilisez le formulaire ci-dessus pour être le premier à proposer un trajet !</p>
             {% else %}
-                <a href="/login" class="btn btn-outline">Connectez-vous pour publier</a>
+                <a href="/login" class="btn btn-primary" style="margin-top:15px;">Connectez-vous pour publier</a>
             {% endif %}
         </div>
     {% endif %}
@@ -110,7 +143,26 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    // Leaflet map logic remains the same...
+    async function geocode(city) {
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}&limit=1`);
+            const data = await res.json();
+            return data.length > 0 ? [parseFloat(data[0].lat), parseFloat(data[0].lon)] : null;
+        } catch { return null; }
+    }
+    async function init() {
+        for (let el of document.querySelectorAll('.map')) {
+            const dep = await geocode(el.dataset.dep), dest = await geocode(el.dataset.dest);
+            if (dep && dest) {
+                const map = L.map(el.id, {zoomControl: false, attributionControl: false}).setView(dep, 10);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                L.marker(dep).addTo(map); L.marker(dest).addTo(map);
+                const line = L.polyline([dep, dest], {color: '#007aff', weight: 4}).addTo(map);
+                map.fitBounds(line.getBounds(), {padding: [30, 30]});
+            }
+        }
+    }
+    window.onload = init;
 </script>
 </body>
 </html>
