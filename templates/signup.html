@@ -1,0 +1,14 @@
+<body style="font-family:sans-serif; background:#f0f2f5; display:flex; justify-content:center; align-items:center; height:100vh; margin:0;">
+    <div style="background:white; padding:40px; border-radius:20px; box-shadow:0 10px 25px rgba(0,0,0,0.1); width:320px;">
+        <h2 style="margin-top:0;">Inscription</h2>
+        <form method="post">
+            <input name="name" placeholder="Nom Complet" required style="width:100%; padding:12px; margin-bottom:10px; border:1px solid #ddd; border-radius:8px; box-sizing:border-box;">
+            <input name="email" type="email" placeholder="Email" required style="width:100%; padding:12px; margin-bottom:10px; border:1px solid #ddd; border-radius:8px; box-sizing:border-box;">
+            <input name="password" type="password" placeholder="Mot de passe" required style="width:100%; padding:12px; margin-bottom:10px; border:1px solid #ddd; border-radius:8px; box-sizing:border-box;">
+            <hr style="border:0; border-top:1px solid #eee; margin:15px 0;">
+            <input name="admin_token" type="password" placeholder="Code Secret Admin (Optionnel)" style="width:100%; padding:12px; margin-bottom:15px; border:1px solid #ddd; border-radius:8px; box-sizing:border-box; background:#fff9f9;">
+            <button type="submit" style="width:100%; padding:12px; background:#34c759; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">Créer le compte</button>
+        </form>
+        <p style="text-align:center; font-size:13px; margin-top:15px;">Déjà un compte? <a href="/login" style="color:#007aff;">Se connecter</a></p>
+    </div>
+</body>

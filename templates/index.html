@@ -2,45 +2,48 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>🚗 Co-voiturage</title>
+    <title>Co-voiturage Matrix</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root { --glass: rgba(255, 255, 255, 0.9); --accent: #007aff; --success: #34c759; --danger: #ff3b30; }
         body { margin: 0; padding: 20px; font-family: sans-serif; min-height: 100vh; }
         body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: url("/static/carte-postale-ancienne-lechelle-20_0.jpg") center/cover; filter: blur(15px); z-index: -1; transform: scale(1.1); }
-        .container { max-width: 1200px; margin: 0 auto; }
         .nav { display: flex; justify-content: space-between; align-items: center; background: var(--glass); padding: 15px 25px; border-radius: 50px; margin-bottom: 30px; }
         .ride-matrix { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
-        .ride-card { background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .ride-card { background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
         .map-container { height: 160px; width: 100%; border-bottom: 1px solid #eee; }
-        .p-20 { padding: 20px; }
-        .btn { border: none; padding: 10px 20px; border-radius: 10px; font-weight: bold; cursor: pointer; text-decoration: none; display: inline-block; }
-        .btn-success { background: var(--success); color: white; width: 100%; text-align: center; }
+        .p-20 { padding: 20px; flex-grow: 1; }
+        .btn { border: none; padding: 10px 20px; border-radius: 10px; font-weight: bold; cursor: pointer; text-decoration: none; text-align: center; }
         .form-card { background: var(--glass); padding: 25px; border-radius: 20px; margin-bottom: 30px; }
         input { padding: 12px; margin: 5px 0; border: 1px solid #ddd; border-radius: 10px; width: 100%; box-sizing: border-box; }
+        .alert { padding: 15px; background: var(--success); color: white; border-radius: 10px; margin-bottom: 20px; text-align: center; }
     </style>
 </head>
 <body>
-<div class="container">
+<div style="max-width:1200px; margin:0 auto;">
     <div class="nav">
         <strong>🚗 Co-voiturage</strong>
         <div>
             {% if current_user.is_authenticated %}
-                <span>Salut, {{ current_user.name }}</span> | <a href="/logout">Déconnexion</a>
+                <span>{{ current_user.name }} {% if current_user.is_admin %}(Admin){% endif %}</span> | <a href="/logout">Logout</a>
             {% else %}
-                <a href="/login">Connexion</a> | <a href="/signup">Inscription</a>
+                <a href="/login">Login</a> | <a href="/signup">Signup</a>
             {% endif %}
         </div>
     </div>
 
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}{% for m in messages %}<div class="alert">{{ m }}</div>{% endfor %}{% endif %}
+    {% endwith %}
+
     {% if current_user.is_authenticated %}
     <div class="form-card">
         <h3>Proposer un trajet</h3>
-        <form action="/publish" method="post" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
-            <input name="departure" placeholder="Départ (Ville ou CP)" required>
+        <form action="/publish" method="post" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;">
+            <input name="departure" placeholder="Départ (Ville/CP)" required>
             <input name="destination" placeholder="Arrivée" required>
-            <input name="contact" placeholder="Tél/WhatsApp" required>
+            <input name="contact" placeholder="Tél" required>
             <input type="date" name="date" required>
             <input type="time" name="time" required>
             <input type="number" name="seats" placeholder="Places" min="1" required>
@@ -55,19 +58,18 @@
             <div id="map_{{ r.id }}" class="map-container" data-dep="{{ r.departure }}" data-dest="{{ r.destination }}"></div>
             <div class="p-20">
                 <div style="font-weight:bold; color:var(--accent);">{{ r.departure }} ➔ {{ r.destination }}</div>
-                <small>📅 {{ r.date }} à {{ r.time }}<br>👤 Chauffeur: {{ r.driver_name }}</small>
-                <div style="margin-top:10px;">Places: <strong>{{ r.seats }}</strong></div>
+                <small>📅 {{ r.date }} à {{ r.time }}<br>👤 Chauffeur: {{ r.driver_name or 'Anonyme' }}</small>
+                <p>Places: <strong>{{ r.seats }}</strong></p>
+                {% if r.seats > 0 %}
+                    <a href="/reserve/{{ r.id }}" class="btn" style="background:var(--success); color:white; display:block;">Réserver</a>
+                {% else %}
+                    <div style="text-align:center; color:gray; font-weight:bold;">COMPLET</div>
+                {% endif %}
                 
-                <div style="margin-top:15px;">
-                    {% if r.seats > 0 %}
-                        <a href="/reserve/{{ r.id }}" class="btn btn-success">Réserver</a>
-                    {% else %}
-                        <div style="text-align:center; color:gray;">Complet</div>
+                {% if current_user.is_authenticated %}
+                    {% if current_user.id == r.user_id or current_user.is_admin %}
+                        <a href="/delete/{{ r.id }}" style="display:block; text-align:center; color:var(--danger); margin-top:15px; font-size:12px; text-decoration:none;">🗑 Supprimer</a>
                     {% endif %}
-                </div>
-
-                {% if current_user.is_authenticated and current_user.id == r.user_id %}
-                    <a href="/delete/{{ r.id }}" style="display:block; text-align:center; color:var(--danger); margin-top:10px; font-size:12px;">Supprimer mon annonce</a>
                 {% endif %}
             </div>
         </div>

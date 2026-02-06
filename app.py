@@ -13,23 +13,25 @@ from psycopg2.extras import DictCursor
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
 
+# Configuration
+DATABASE_URL = os.environ.get('DATABASE_URL')
+ADMIN_SECRET_TOKEN = os.environ.get('ADMIN_SECRET_TOKEN')
+LOCAL_TZ = ZoneInfo("Europe/Paris")
+
 # Flask-Login Setup
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-DATABASE_URL = os.environ.get('DATABASE_URL')
-LOCAL_TZ = ZoneInfo("Europe/Paris")
-
 def get_db():
     return psycopg2.connect(DATABASE_URL, sslmode='require')
 
-# User Class for Flask-Login
 class User(UserMixin):
-    def __init__(self, id, name, email):
+    def __init__(self, id, name, email, is_admin):
         self.id = id
         self.name = name
         self.email = email
+        self.is_admin = is_admin
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -40,7 +42,7 @@ def load_user(user_id):
     cur.close()
     conn.close()
     if u:
-        return User(u['id'], u['name'], u['email'])
+        return User(u['id'], u['name'], u['email'], u.get('is_admin', False))
     return None
 
 def init_db():
@@ -52,22 +54,35 @@ def init_db():
             id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
             email TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL
+            password TEXT NOT NULL,
+            is_admin BOOLEAN DEFAULT FALSE
         )
     """)
-    # Create Rides Table with user_id link
+    # Create Rides Table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS rides (
             id SERIAL PRIMARY KEY,
-            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
             departure TEXT NOT NULL,
             destination TEXT NOT NULL,
             date TEXT NOT NULL,
             time TEXT NOT NULL,
             seats INTEGER NOT NULL,
             departure_ts INTEGER NOT NULL,
-            contact TEXT NOT NULL
+            contact TEXT NOT NULL,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
         )
+    """)
+    # Migration: Ensure user_id and is_admin exist
+    cur.execute("""
+        DO $$ 
+        BEGIN 
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='is_admin') THEN
+                ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='rides' AND column_name='user_id') THEN
+                ALTER TABLE rides ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+            END IF;
+        END $$;
     """)
     conn.commit()
     cur.close()
@@ -75,12 +90,15 @@ def init_db():
 
 def cleanup_old_rides():
     now_ts = int(time.time())
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM rides WHERE departure_ts < %s", (now_ts,))
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM rides WHERE departure_ts < %s", (now_ts,))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Cleanup error: {e}")
 
 if DATABASE_URL:
     init_db()
@@ -95,7 +113,7 @@ def index():
     cur.execute("""
         SELECT r.*, u.name as driver_name 
         FROM rides r 
-        JOIN users u ON r.user_id = u.id 
+        LEFT JOIN users u ON r.user_id = u.id 
         ORDER BY r.departure_ts ASC
     """)
     rides = cur.fetchall()
@@ -110,12 +128,19 @@ def signup():
         email = request.form['email']
         password = generate_password_hash(request.form['password'])
         
+        # Admin Logic from Env Variable
+        user_token = request.form.get('admin_token')
+        is_admin = False
+        if ADMIN_SECRET_TOKEN and user_token == ADMIN_SECRET_TOKEN:
+            is_admin = True
+
         conn = get_db()
         cur = conn.cursor()
         try:
-            cur.execute("INSERT INTO users (name, email, password) VALUES (%s, %s, %s)", (name, email, password))
+            cur.execute("INSERT INTO users (name, email, password, is_admin) VALUES (%s, %s, %s, %s)", 
+                        (name, email, password, is_admin))
             conn.commit()
-            flash("Compte créé ! Connectez-vous.", "success")
+            flash("Compte créé !", "success")
             return redirect(url_for('login'))
         except:
             flash("Email déjà utilisé.", "error")
@@ -130,15 +155,14 @@ def login():
         conn = get_db()
         cur = conn.cursor(cursor_factory=DictCursor)
         cur.execute("SELECT * FROM users WHERE email = %s", (request.form['email'],))
-        user_data = cur.fetchone()
+        u = cur.fetchone()
         cur.close()
         conn.close()
-
-        if user_data and check_password_hash(user_data['password'], request.form['password']):
-            user_obj = User(user_data['id'], user_data['name'], user_data['email'])
+        if u and check_password_hash(u['password'], request.form['password']):
+            user_obj = User(u['id'], u['name'], u['email'], u['is_admin'])
             login_user(user_obj)
             return redirect(url_for('index'))
-        flash("Email ou mot de passe incorrect.", "error")
+        flash("Identifiants incorrects.", "error")
     return render_template('login.html')
 
 @app.route('/logout')
@@ -149,11 +173,7 @@ def logout():
 @app.route('/publish', methods=['POST'])
 @login_required
 def publish():
-    local_dt = datetime.strptime(
-        request.form["date"] + " " + request.form["time"],
-        "%Y-%m-%d %H:%M"
-    ).replace(tzinfo=LOCAL_TZ)
-
+    local_dt = datetime.strptime(request.form["date"] + " " + request.form["time"], "%Y-%m-%d %H:%M").replace(tzinfo=LOCAL_TZ)
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
@@ -176,7 +196,6 @@ def reserve(ride_id):
     conn.commit()
     cur.close()
     conn.close()
-    flash("Place réservée !", "success")
     return redirect(url_for("index"))
 
 @app.route("/delete/<int:ride_id>")
@@ -184,8 +203,10 @@ def reserve(ride_id):
 def delete_ride(ride_id):
     conn = get_db()
     cur = conn.cursor()
-    # Check if the current user is the owner
-    cur.execute("DELETE FROM rides WHERE id = %s AND user_id = %s", (ride_id, current_user.id))
+    if current_user.is_admin:
+        cur.execute("DELETE FROM rides WHERE id = %s", (ride_id,))
+    else:
+        cur.execute("DELETE FROM rides WHERE id = %s AND user_id = %s", (ride_id, current_user.id))
     conn.commit()
     cur.close()
     conn.close()
