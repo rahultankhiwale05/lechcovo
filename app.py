@@ -47,12 +47,7 @@ def load_user(user_id):
 def init_db():
     conn = get_db()
     cur = conn.cursor()
-    
-    # --- TEMPORARY FIX: RUN ONCE TO RESET THE TABLE STRUCTURE ---
-    # This removes the old columns (secret, name) that cause the crash
-    cur.execute("DROP TABLE IF EXISTS rides CASCADE") 
-    
-    # Re-create Users Table
+    # 1. Users Table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
@@ -62,8 +57,7 @@ def init_db():
             is_admin BOOLEAN DEFAULT FALSE
         )
     """)
-    
-    # Re-create Rides Table (Correct structure)
+    # 2. Rides Table (Structure updated to match image_76339c.png)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS rides (
             id SERIAL PRIMARY KEY,
@@ -158,6 +152,26 @@ def publish():
     except Exception as e:
         flash(f"Erreur : {e}")
     return redirect(url_for('index'))
+
+@app.route("/reserve/<int:ride_id>")
+@login_required
+def reserve(ride_id):
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=DictCursor)
+    cur.execute("SELECT * FROM rides WHERE id = %s", (ride_id,))
+    ride = cur.fetchone()
+    
+    if ride and ride['user_id'] != current_user.id and ride['seats'] > 0:
+        cur.execute("UPDATE rides SET seats = seats - 1 WHERE id = %s", (ride_id,))
+        conn.commit()
+        flash("Réservation réussie !", "success")
+    elif ride and ride['user_id'] == current_user.id:
+        flash("Vous ne pouvez pas réserver votre propre trajet.")
+    else:
+        flash("Erreur lors de la réservation.")
+        
+    cur.close(); conn.close()
+    return redirect(url_for("index"))
 
 @app.route("/delete/<int:ride_id>")
 @login_required
