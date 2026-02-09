@@ -54,10 +54,29 @@ if DATABASE_URL: init_db()
 def index():
     conn = get_db()
     cur = conn.cursor(cursor_factory=DictCursor)
+    # Check if the current user has confirmed reservations to show contact info
+    user_reservations = []
+    if current_user.is_authenticated:
+        cur.execute("SELECT ride_id FROM reservations WHERE user_id = %s AND status = 'confirmed'", (current_user.id,))
+        user_reservations = [r['ride_id'] for r in cur.fetchall()]
+
     cur.execute("SELECT r.*, u.name as driver_name FROM rides r LEFT JOIN users u ON r.user_id = u.id WHERE r.active = TRUE ORDER BY r.departure_ts ASC")
     rides = cur.fetchall()
     cur.close(); conn.close()
-    return render_template('index.html', rides=rides)
+    return render_template('index.html', rides=rides, user_reservations=user_reservations)
+
+# GDPR COMPLIANCE: Delete Account Route
+@app.route('/delete-account', methods=['POST'])
+@login_required
+def delete_account():
+    conn = get_db()
+    cur = conn.cursor()
+    # Cascading delete will remove their rides and reservations automatically
+    cur.execute("DELETE FROM users WHERE id = %s", (current_user.id,))
+    conn.commit(); cur.close(); conn.close()
+    logout_user()
+    flash("Votre compte et vos données ont été définitivement supprimés.")
+    return redirect(url_for('index'))
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
@@ -70,7 +89,7 @@ def signup():
                        (request.form['name'], request.form['email'], generate_password_hash(request.form['password']), is_admin))
             conn.commit()
             return redirect(url_for('login'))
-        except: flash("Email déjà utilisé.")
+        except: flash("Erreur lors de l'inscription.")
         finally: cur.close(); conn.close()
     return render_template('signup.html')
 
