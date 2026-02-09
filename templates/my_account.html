@@ -3,64 +3,34 @@
 
 {% block content %}
 <div class="container" style="padding-top: 40px; padding-bottom: 60px;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
-        <h1 style="margin: 0;">Bonjour, {{ current_user.name }}</h1>
-        {% if current_user.is_admin %}
-            <span style="background: #34c759; color: white; padding: 5px 12px; border-radius: 20px; font-size: 0.8em; font-weight: bold;">ADMINISTRATEUR</span>
-        {% endif %}
-    </div>
+    <h1>Bonjour, {{ current_user.name }}</h1>
 
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 30px;">
-        
         <div style="background: white; padding: 25px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-            <h3 style="margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px;">🚗 Trajets que je propose</h3>
-            {% if driving %}
-                {% for r in driving %}
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px dashed #eee;">
-                    <div>
-                        <strong>{{ r.departure }} ➔ {{ r.destination }}</strong><br>
-                        <small style="color: var(--gray);">{{ r.date }} à {{ r.time }}</small>
-                    </div>
-                    <a href="/delete/{{ r.id }}" onclick="return confirm('Archiver ce trajet ?')" style="color: var(--red); font-weight: bold; text-decoration: none;">Annuler</a>
-                </div>
-                {% endfor %}
-            {% else %}
-                <p style="color: var(--gray); font-style: italic;">Vous n'avez proposé aucun trajet.</p>
-            {% endif %}
+            <h3 style="margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px;">🚗 Mes trajets</h3>
+            {% for r in driving %}
+            <div style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px dashed #eee;">
+                <span>{{ r.date }} - {{ r.departure }} ➔ {{ r.destination }}</span>
+                <a href="/delete/{{ r.id }}" style="color: var(--red); font-weight: bold; text-decoration: none;">Annuler</a>
+            </div>
+            {% endfor %}
         </div>
 
         <div style="background: white; padding: 25px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
             <h3 style="margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px;">🎫 Mes réservations</h3>
-            {% if joined %}
-                {% for r in joined %}
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px dashed #eee;">
-                    <div>
-                        <strong>{{ r.departure }} ➔ {{ r.destination }}</strong><br>
-                        <span style="font-size: 0.8em; padding: 2px 6px; border-radius: 4px; font-weight: bold; 
-                            background: {{ '#e3f2fd' if r.status == 'confirmed' else '#fff3e0' }}; 
-                            color: {{ '#007aff' if r.status == 'confirmed' else '#ef6c00' }};">
-                            {{ 'CONFIRMÉ' if r.status == 'confirmed' else 'EN ATTENTE' }}
-                        </span>
-                    </div>
-                    <a href="/unreserve/{{ r.id }}" style="color: var(--gray); font-weight: bold; text-decoration: none;">Se désister</a>
-                </div>
-                {% endfor %}
-            {% else %}
-                <p style="color: var(--gray); font-style: italic;">Aucune réservation en cours.</p>
-            {% endif %}
+            {% for r in joined %}
+            <div style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px dashed #eee;">
+                <span>{{ r.date }} - {{ r.departure }} ➔ {{ r.destination }}</span>
+                <a href="/unreserve/{{ r.id }}" style="color: var(--gray); text-decoration: none;">Se désister</a>
+            </div>
+            {% endfor %}
         </div>
-
     </div>
 
-    <div style="margin-top: 80px; padding: 30px; background: #fff; border: 1px solid #ffcccc; border-radius: 20px; text-align: center;">
-        <h4 style="color: var(--red); margin-top: 0;">Protection des données & Confidentialité</h4>
-        <p style="color: var(--gray); font-size: 0.9em; max-width: 600px; margin: 0 auto 20px auto;">
-            Conformément au RGPD, vous disposez d'un droit à l'oubli. En supprimant votre compte, toutes vos données personnelles, 
-            trajets et réservations seront effacés définitivement de nos serveurs.
-        </p>
-        <form action="/delete-account" method="POST" onsubmit="return confirm('ATTENTION : Cette action supprimera définitivement votre compte et toutes vos données. Continuer ?');">
-            <button type="submit" class="btn" style="background: none; border: 1.5px solid var(--red); color: var(--red); font-size: 0.85em;">
-                Supprimer mon compte définitivement
+    <div style="margin-top: 80px; text-align: center;">
+        <form action="/delete-account" method="POST" onsubmit="return confirm('Supprimer définitivement votre compte ?');">
+            <button type="submit" class="btn" style="border: 1px solid var(--red); color: var(--red); background: none;">
+                Supprimer mon compte (RGPD)
             </button>
         </form>
     </div>
