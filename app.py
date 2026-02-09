@@ -15,10 +15,9 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 ADMIN_SECRET_TOKEN = os.environ.get('ADMIN_SECRET_TOKEN')
 LOCAL_TZ = ZoneInfo("Europe/Paris")
 
-# --- DATE FORMAT FILTER ---
+# --- CUSTOM DATE FILTER: Forces DD-MM-YYYY ---
 @app.template_filter('date_french')
 def date_french(date_str):
-    """Converts YYYY-MM-DD to DD-MM-YYYY for the UI."""
     try:
         if len(date_str) == 10 and date_str[2] == '-' and date_str[5] == '-':
             return date_str
@@ -80,6 +79,42 @@ def publish():
     except Exception as e: flash(f"Erreur: {e}")
     return redirect(url_for('index'))
 
+# --- FIXED DELETE RIDE ROUTE: Solves 404 ---
+@app.route("/delete/<int:ride_id>")
+@login_required
+def delete_ride(ride_id):
+    conn = get_db()
+    cur = conn.cursor()
+    if current_user.is_admin:
+        cur.execute("DELETE FROM rides WHERE id = %s", (ride_id,))
+    else:
+        cur.execute("DELETE FROM rides WHERE id = %s AND user_id = %s", (ride_id, current_user.id))
+    conn.commit(); cur.close(); conn.close()
+    return redirect(url_for("my_account"))
+
+@app.route('/my-account')
+@login_required
+def my_account():
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=DictCursor)
+    cur.execute("SELECT * FROM rides WHERE user_id = %s ORDER BY departure_ts DESC", (current_user.id,))
+    driving = cur.fetchall()
+    cur.execute("SELECT r.*, res.status FROM rides r JOIN reservations res ON r.id = res.ride_id WHERE res.user_id = %s ORDER BY r.departure_ts DESC", (current_user.id,))
+    joined = cur.fetchall()
+    cur.close(); conn.close()
+    return render_template('my_account.html', driving=driving, joined=joined)
+
+# --- GDPR: ACCOUNT ERASURE ---
+@app.route('/delete-account', methods=['POST'])
+@login_required
+def delete_account():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM users WHERE id = %s", (current_user.id,))
+    conn.commit(); cur.close(); conn.close()
+    logout_user()
+    return redirect(url_for('index'))
+
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
@@ -108,27 +143,39 @@ def login():
             return redirect(url_for('index'))
     return render_template('login.html')
 
-@app.route('/my-account')
+@app.route('/reserve/<int:ride_id>')
 @login_required
-def my_account():
+def reserve(ride_id):
     conn = get_db()
     cur = conn.cursor(cursor_factory=DictCursor)
-    cur.execute("SELECT * FROM rides WHERE user_id = %s ORDER BY departure_ts DESC", (current_user.id,))
-    driving = cur.fetchall()
-    cur.execute("SELECT r.*, res.status FROM rides r JOIN reservations res ON r.id = res.ride_id WHERE res.user_id = %s ORDER BY r.departure_ts DESC", (current_user.id,))
-    joined = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('my_account.html', driving=driving, joined=joined)
+    try:
+        cur.execute("SELECT seats, user_id FROM rides WHERE id = %s", (ride_id,))
+        ride = cur.fetchone()
+        if ride and ride['user_id'] != current_user.id:
+            status = 'confirmed' if ride['seats'] > 0 else 'waiting'
+            cur.execute("INSERT INTO reservations (user_id, ride_id, status) VALUES (%s, %s, %s)", (current_user.id, ride_id, status))
+            if status == 'confirmed':
+                cur.execute("UPDATE rides SET seats = seats - 1 WHERE id = %s", (ride_id,))
+            conn.commit()
+    except: flash("Déjà inscrit.")
+    finally: cur.close(); conn.close()
+    return redirect(url_for("index"))
 
-@app.route('/delete-account', methods=['POST'])
+@app.route('/unreserve/<int:ride_id>')
 @login_required
-def delete_account():
+def unreserve(ride_id):
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM users WHERE id = %s", (current_user.id,)) # GDPR
-    conn.commit(); cur.close(); conn.close()
-    logout_user()
-    return redirect(url_for('index'))
+    cur = conn.cursor(cursor_factory=DictCursor)
+    cur.execute("SELECT status FROM reservations WHERE user_id = %s AND ride_id = %s", (current_user.id, ride_id))
+    res = cur.fetchone()
+    if res:
+        was_confirmed = (res['status'] == 'confirmed')
+        cur.execute("DELETE FROM reservations WHERE user_id = %s AND ride_id = %s", (current_user.id, ride_id))
+        if was_confirmed:
+            cur.execute("UPDATE rides SET seats = seats + 1 WHERE id = %s", (ride_id,))
+        conn.commit()
+    cur.close(); conn.close()
+    return redirect(url_for("my_account"))
 
 @app.route('/logout')
 def logout():
