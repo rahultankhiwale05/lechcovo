@@ -12,7 +12,7 @@
         <div style="background: white; padding: 25px; border-radius: 20px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
             <div style="font-size:2rem; margin-bottom:10px;">📱</div>
             <h3>S'inscrire</h3>
-            <p style="color:var(--gray); font-size:0.9em;">Créez votre profil pour réserver un trajet.</p>
+            <p style="color:var(--gray); font-size:0.9em;">Créez votre profil pour commencer.</p>
             <a href="/signup" class="btn btn-primary" style="width:auto;">Rejoindre</a>
         </div>
         <div style="background: white; padding: 25px; border-radius: 20px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
@@ -42,7 +42,7 @@
             <div id="map_{{ r.id }}" style="height:150px;" data-dep="{{ r.departure }}" data-dest="{{ r.destination }}"></div>
             <div style="padding:15px;">
                 <strong>{{ r.departure }} ➔ {{ r.destination }}</strong><br>
-                <small style="color:var(--gray);">{{ r.date }} à {{ r.time }} | Par: {{ r.driver_name }}</small>
+                <small style="color:var(--gray);">Le {{ r.date }} à {{ r.time }} | Par: {{ r.driver_name }}</small>
                 
                 <div style="margin: 12px 0;">
                     {% if current_user.is_authenticated and (current_user.id == r.user_id or r.id in user_reservations) %}
@@ -50,7 +50,7 @@
                             📞 {{ r.contact }}
                         </span>
                     {% else %}
-                        <span style="color:var(--gray); font-size:0.8em; font-style:italic;">Contact réservé aux passagers</span>
+                        <span style="color:var(--gray); font-size:0.8em; font-style:italic;">Contact visible après réservation</span>
                     {% endif %}
                 </div>
 
