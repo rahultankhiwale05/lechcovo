@@ -1,36 +1,36 @@
 {% extends "base.html" %}
-{% block title %}Mon Espace - Lechelle Covoit{% endblock %}
-
 {% block content %}
-<div class="container" style="padding-top: 40px; padding-bottom: 60px;">
+<div class="container" style="padding: 40px 20px;">
     <h1>Bonjour, {{ current_user.name }}</h1>
-
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 30px;">
         <div style="background: white; padding: 25px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-            <h3 style="margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px;">🚗 Mes trajets</h3>
+            <h3>🚗 Mes trajets proposés</h3>
             {% for r in driving %}
             <div style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px dashed #eee;">
                 <span>{{ r.date }} - {{ r.departure }} ➔ {{ r.destination }}</span>
-                <a href="/delete/{{ r.id }}" style="color: var(--red); font-weight: bold; text-decoration: none;">Annuler</a>
+                <a href="/delete/{{ r.id }}" style="color: var(--red); font-weight: bold;">Annuler</a>
             </div>
             {% endfor %}
         </div>
-
         <div style="background: white; padding: 25px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-            <h3 style="margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px;">🎫 Mes réservations</h3>
+            <h3>🎫 Mes réservations</h3>
             {% for r in joined %}
             <div style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px dashed #eee;">
                 <span>{{ r.date }} - {{ r.departure }} ➔ {{ r.destination }}</span>
-                <a href="/unreserve/{{ r.id }}" style="color: var(--gray); text-decoration: none;">Se désister</a>
+                <a href="/unreserve/{{ r.id }}" style="color: var(--gray);">Se désister</a>
             </div>
             {% endfor %}
         </div>
     </div>
-
-    <div style="margin-top: 80px; text-align: center;">
-        <form action="/delete-account" method="POST" onsubmit="return confirm('Supprimer définitivement votre compte ?');">
-            <button type="submit" class="btn" style="border: 1px solid var(--red); color: var(--red); background: none;">
-                Supprimer mon compte (RGPD)
+    <div style="margin-top: 80px; padding: 30px; background: #fff; border: 1px solid #ffcccc; border-radius: 20px; text-align: center;">
+        <h4 style="color: var(--red); margin-top: 0;">Protection des données & Confidentialité</h4>
+        <p style="color: var(--gray); font-size: 0.9em; max-width: 600px; margin: 0 auto 20px auto;">
+            Conformément au RGPD, vous disposez d'un droit à l'oubli. En supprimant votre compte, toutes vos données personnelles, 
+            trajets et réservations seront effacés définitivement de nos serveurs.
+        </p>
+        <form action="/delete-account" method="POST" onsubmit="return confirm('ATTENTION : Cette action supprimera définitivement votre compte et toutes vos données. Continuer ?');">
+            <button type="submit" class="btn" style="background: none; border: 1.5px solid var(--red); color: var(--red); font-size: 0.85em;">
+                Supprimer mon compte définitivement
             </button>
         </form>
     </div>

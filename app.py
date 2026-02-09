@@ -12,7 +12,6 @@ from psycopg2.extras import DictCursor
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
 
-# Config
 DATABASE_URL = os.environ.get('DATABASE_URL')
 ADMIN_SECRET_TOKEN = os.environ.get('ADMIN_SECRET_TOKEN')
 LOCAL_TZ = ZoneInfo("Europe/Paris")
@@ -69,10 +68,9 @@ def index():
 @login_required
 def publish():
     try:
-        # Date Conversion: YYYY-MM-DD -> DD-MM-YYYY
-        raw_date = request.form['date']
+        raw_date = request.form['date'] # YYYY-MM-DD from browser
         dt_obj = datetime.strptime(raw_date, "%Y-%m-%d")
-        formatted_date = dt_obj.strftime("%d-%m-%Y")
+        formatted_date = dt_obj.strftime("%d-%m-%Y") # Save as DD-MM-YYYY
 
         dt_str = f"{raw_date} {request.form['time']}"
         local_dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M").replace(tzinfo=LOCAL_TZ)
@@ -90,9 +88,10 @@ def publish():
 def delete_account():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("DELETE FROM users WHERE id = %s", (current_user.id,))
+    cur.execute("DELETE FROM users WHERE id = %s", (current_user.id,)) # Right to erasure
     conn.commit(); cur.close(); conn.close()
     logout_user()
+    flash("Votre compte et vos données ont été supprimés.")
     return redirect(url_for('index'))
 
 @app.route('/signup', methods=['GET', 'POST'])
