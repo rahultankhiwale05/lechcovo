@@ -1,7 +1,29 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="container" style="padding-top: 40px; padding-bottom: 60px;">
-    <h1>Bonjour, {{ current_user.name }}</h1>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+        <h1>Bonjour, {{ current_user.name }}</h1>
+        <div style="background: white; padding: 10px 20px; border-radius: 50px; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #eee;">
+            <span style="font-size: 1.2rem;">🌱</span>
+            <div>
+                <div style="font-weight: 800; font-size: 0.9rem; color: #2ecc71;">+{{ impact.co2|round(1) }}kg CO2</div>
+                <div style="font-size: 0.6rem; color: var(--gray); text-transform: uppercase;">Mon Impact</div>
+            </div>
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 40px;">
+        <div style="background: white; padding: 20px; border-radius: 20px; text-align: center; border: 1.5px solid #2ecc71;">
+            <div style="font-size: 1.8rem;">💶</div>
+            <div style="font-weight: bold; font-size: 1.3rem;">{{ impact.money|round(1) }}€</div>
+            <div style="font-size: 0.8rem; color: var(--gray);">Économies personnelles</div>
+        </div>
+        <div style="background: white; padding: 20px; border-radius: 20px; text-align: center; border: 1.5px solid var(--accent);">
+            <div style="font-size: 1.8rem;">🚗</div>
+            <div style="font-weight: bold; font-size: 1.3rem;">{{ impact.rides }}</div>
+            <div style="font-size: 0.8rem; color: var(--gray);">Trajets partagés</div>
+        </div>
+    </div>
 
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 30px;">
         <div style="background: white; padding: 25px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
@@ -12,9 +34,7 @@
                     <strong>{{ r.departure }} ➔ {{ r.destination }}</strong><br>
                     <small style="color: var(--gray);">{{ r.date|date_french }} à {{ r.time }}</small>
                 </div>
-                <a href="{{ url_for('delete_ride', ride_id=r.id) }}" 
-                   onclick="return confirm('Supprimer ce trajet ?')" 
-                   style="color: var(--red); font-weight: bold; text-decoration: none;">Supprimer</a>
+                <a href="{{ url_for('delete_ride', ride_id=r.id) }}" onclick="return confirm('Supprimer ce trajet ?')" style="color: var(--red); font-weight: bold;">Supprimer</a>
             </div>
             {% endfor %}
         </div>
@@ -27,22 +47,10 @@
                     <strong>{{ r.departure }} ➔ {{ r.destination }}</strong><br>
                     <small style="color: var(--gray);">Le {{ r.date|date_french }}</small>
                 </div>
-                <a href="/unreserve/{{ r.id }}" style="color: var(--gray); text-decoration: none;">Se désister</a>
+                <a href="/unreserve/{{ r.id }}" style="color: var(--gray);">Se désister</a>
             </div>
             {% endfor %}
         </div>
-    </div>
-
-    <div style="margin-top: 80px; padding: 30px; background: #fff; border: 1px solid #ffcccc; border-radius: 20px; text-align: center;">
-        <h4 style="color: var(--red); margin-top: 0;">Protection des données & Confidentialité</h4>
-        <p style="color: var(--gray); font-size: 0.9em; max-width: 600px; margin: 0 auto 20px auto;">
-            Conformément au RGPD, vous disposez d'un droit à l'oubli. En supprimant votre compte, toutes vos données personnelles seront effacées définitivement de nos serveurs.
-        </p>
-        <form action="/delete-account" method="POST" onsubmit="return confirm('Supprimer définitivement votre compte ?');">
-            <button type="submit" class="btn" style="background: none; border: 1.5px solid var(--red); color: var(--red); font-size: 0.85em;">
-                Supprimer mon compte définitivement
-            </button>
-        </form>
     </div>
 </div>
 {% endblock %}
