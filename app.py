@@ -15,7 +15,7 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 ADMIN_SECRET_TOKEN = os.environ.get('ADMIN_SECRET_TOKEN')
 LOCAL_TZ = ZoneInfo("Europe/Paris")
 
-# --- CUSTOM DATE FILTER: Forces DD-MM-YYYY ---
+# --- CUSTOM DATE FILTER ---
 @app.template_filter('date_french')
 def date_french(date_str):
     try:
@@ -55,14 +55,13 @@ def index():
     conn = get_db()
     cur = conn.cursor(cursor_factory=DictCursor)
     
-    # --- CALCULATE IMPACT STATS ---
-    # We count all confirmed reservations to estimate impact
+    # --- IMPACT STATS ---
     cur.execute("SELECT COUNT(*) FROM reservations WHERE status = 'confirmed'")
     count = cur.fetchone()[0] or 0
     stats = {
-        "co2": count * 2.4,        # Approx 2.4kg CO2 saved per carpooler
-        "money": count * 4.2,      # Approx 4.2€ saved in fuel/wear
-        "connections": count + 12  # Adding a baseline for community feel
+        "co2": count * 2.4,
+        "money": count * 4.2,
+        "connections": count + 5
     }
 
     cur.execute("""
@@ -75,6 +74,35 @@ def index():
     rides = cur.fetchall()
     cur.close(); conn.close()
     return render_template('index.html', rides=rides, stats=stats)
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if request.method == 'POST':
+        is_admin = (request.form.get('admin_token') == ADMIN_SECRET_TOKEN) if ADMIN_SECRET_TOKEN else False
+        conn = get_db()
+        cur = conn.cursor()
+        try:
+            cur.execute("INSERT INTO users (name, email, password, is_admin) VALUES (%s, %s, %s, %s)",
+                       (request.form['name'], request.form['email'], generate_password_hash(request.form['password']), is_admin))
+            conn.commit()
+            return redirect(url_for('login'))
+        except: flash("Email déjà utilisé.")
+        finally: cur.close(); conn.close()
+    return render_template('signup.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=DictCursor)
+        cur.execute("SELECT * FROM users WHERE email = %s", (request.form['email'],))
+        u = cur.fetchone()
+        cur.close(); conn.close()
+        if u and check_password_hash(u['password'], request.form['password']):
+            login_user(User(u['id'], u['name'], u['email'], u['is_admin']))
+            return redirect(url_for('index'))
+        flash("Email ou mot de passe incorrect.")
+    return render_template('login.html')
 
 @app.route('/publish', methods=['POST'])
 @login_required
@@ -105,7 +133,6 @@ def delete_ride(ride_id):
     if ride and (ride['user_id'] == current_user.id or current_user.is_admin):
         cur.execute("DELETE FROM rides WHERE id = %s", (ride_id,))
         conn.commit()
-        flash("Trajet supprimé.")
     cur.close(); conn.close()
     return redirect(request.referrer or url_for('index'))
 
@@ -139,10 +166,35 @@ def reserve(ride_id):
             if status == 'confirmed':
                 cur.execute("UPDATE rides SET seats = seats - 1 WHERE id = %s", (ride_id,))
             conn.commit()
-            flash("Réservation réussie !")
     except: flash("Déjà inscrit.")
     finally: cur.close(); conn.close()
     return redirect(url_for("index"))
+
+@app.route('/unreserve/<int:ride_id>')
+@login_required
+def unreserve(ride_id):
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=DictCursor)
+    cur.execute("SELECT status FROM reservations WHERE user_id = %s AND ride_id = %s", (current_user.id, ride_id))
+    res = cur.fetchone()
+    if res:
+        was_confirmed = (res['status'] == 'confirmed')
+        cur.execute("DELETE FROM reservations WHERE user_id = %s AND ride_id = %s", (current_user.id, ride_id))
+        if was_confirmed:
+            cur.execute("UPDATE rides SET seats = seats + 1 WHERE id = %s", (ride_id,))
+        conn.commit()
+    cur.close(); conn.close()
+    return redirect(url_for("my_account"))
+
+@app.route('/delete-account', methods=['POST'])
+@login_required
+def delete_account():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM users WHERE id = %s", (current_user.id,))
+    conn.commit(); cur.close(); conn.close()
+    logout_user()
+    return redirect(url_for('index'))
 
 @app.route('/logout')
 def logout():
