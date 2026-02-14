@@ -54,14 +54,17 @@ def load_user(user_id):
 def index():
     conn = get_db()
     cur = conn.cursor(cursor_factory=DictCursor)
-    user_reservations = []
-    if current_user.is_authenticated:
-        cur.execute("SELECT ride_id FROM reservations WHERE user_id = %s AND status = 'confirmed'", (current_user.id,))
-        user_reservations = [r['ride_id'] for r in cur.fetchall()]
-    cur.execute("SELECT r.*, u.name as driver_name FROM rides r LEFT JOIN users u ON r.user_id = u.id WHERE r.active = TRUE ORDER BY r.departure_ts ASC")
+    # Fetch r.user_id so index.html can identify the author
+    cur.execute("""
+        SELECT r.*, u.name as driver_name 
+        FROM rides r 
+        LEFT JOIN users u ON r.user_id = u.id 
+        WHERE r.active = TRUE 
+        ORDER BY r.departure_ts ASC
+    """)
     rides = cur.fetchall()
     cur.close(); conn.close()
-    return render_template('index.html', rides=rides, user_reservations=user_reservations)
+    return render_template('index.html', rides=rides)
 
 @app.route('/publish', methods=['POST'])
 @login_required
@@ -73,24 +76,28 @@ def publish():
         local_dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M").replace(tzinfo=LOCAL_TZ)
         conn = get_db()
         cur = conn.cursor()
-        cur.execute("INSERT INTO rides (user_id, departure, destination, date, time, seats, departure_ts, contact) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                   (current_user.id, request.form['departure'], request.form['destination'], raw_date, time_input, int(request.form['seats']), int(local_dt.timestamp()), request.form['contact']))
+        cur.execute("""
+            INSERT INTO rides (user_id, departure, destination, date, time, seats, departure_ts, contact) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (current_user.id, request.form['departure'], request.form['destination'], 
+              raw_date, time_input, int(request.form['seats']), int(local_dt.timestamp()), request.form['contact']))
         conn.commit(); cur.close(); conn.close()
     except Exception as e: flash(f"Erreur: {e}")
     return redirect(url_for('index'))
 
-# --- FIXED DELETE RIDE ROUTE: Solves 404 ---
 @app.route("/delete/<int:ride_id>")
 @login_required
 def delete_ride(ride_id):
     conn = get_db()
-    cur = conn.cursor()
-    if current_user.is_admin:
+    cur = conn.cursor(cursor_factory=DictCursor)
+    cur.execute("SELECT user_id FROM rides WHERE id = %s", (ride_id,))
+    ride = cur.fetchone()
+    # Security check: only author or admin can delete
+    if ride and (ride['user_id'] == current_user.id or current_user.is_admin):
         cur.execute("DELETE FROM rides WHERE id = %s", (ride_id,))
-    else:
-        cur.execute("DELETE FROM rides WHERE id = %s AND user_id = %s", (ride_id, current_user.id))
-    conn.commit(); cur.close(); conn.close()
-    return redirect(url_for("my_account"))
+        conn.commit()
+    cur.close(); conn.close()
+    return redirect(request.referrer or url_for('index'))
 
 @app.route('/my-account')
 @login_required
@@ -99,12 +106,15 @@ def my_account():
     cur = conn.cursor(cursor_factory=DictCursor)
     cur.execute("SELECT * FROM rides WHERE user_id = %s ORDER BY departure_ts DESC", (current_user.id,))
     driving = cur.fetchall()
-    cur.execute("SELECT r.*, res.status FROM rides r JOIN reservations res ON r.id = res.ride_id WHERE res.user_id = %s ORDER BY r.departure_ts DESC", (current_user.id,))
+    cur.execute("""
+        SELECT r.*, res.status FROM rides r 
+        JOIN reservations res ON r.id = res.ride_id 
+        WHERE res.user_id = %s ORDER BY r.departure_ts DESC
+    """, (current_user.id,))
     joined = cur.fetchall()
     cur.close(); conn.close()
     return render_template('my_account.html', driving=driving, joined=joined)
 
-# --- GDPR: ACCOUNT ERASURE ---
 @app.route('/delete-account', methods=['POST'])
 @login_required
 def delete_account():
